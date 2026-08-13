@@ -57,24 +57,34 @@ class NotificationSpeechFilterTest {
     }
 
     @Test
-    fun `ongoing group summary and foreground service are filtered`() {
+    fun `ongoing and foreground service filtered by default but allowed when toggled off`() {
         val allow = setOf("com.example.chat")
         assertFalse(
             NotificationSpeechFilter.shouldSpeak(
                 "com.example.chat", "buzz.delena.crier", allow, "t", "b",
                 isOngoing = true, isGroupSummary = false, isForegroundService = false,
+                filterOngoing = true,
             ),
         )
-        assertFalse(
+        assertTrue(
             NotificationSpeechFilter.shouldSpeak(
                 "com.example.chat", "buzz.delena.crier", allow, "t", "b",
-                isOngoing = false, isGroupSummary = true, isForegroundService = false,
+                isOngoing = true, isGroupSummary = false, isForegroundService = false,
+                filterOngoing = false,
             ),
         )
         assertFalse(
             NotificationSpeechFilter.shouldSpeak(
                 "com.example.chat", "buzz.delena.crier", allow, "t", "b",
                 isOngoing = false, isGroupSummary = false, isForegroundService = true,
+                filterForegroundServices = true,
+            ),
+        )
+        assertTrue(
+            NotificationSpeechFilter.shouldSpeak(
+                "com.example.chat", "buzz.delena.crier", allow, "t", "b",
+                isOngoing = false, isGroupSummary = false, isForegroundService = true,
+                filterForegroundServices = false,
             ),
         )
     }

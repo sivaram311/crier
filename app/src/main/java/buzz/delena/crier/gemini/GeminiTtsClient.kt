@@ -40,15 +40,33 @@ class GeminiTtsClient(
         val modelId = normalizeTtsModel(model)
         val voiceName = voice.trim().ifBlank { DEFAULT_VOICE }
         val lang = languageCode.trim().ifBlank { DEFAULT_LANGUAGE }
-        val spokenPrompt = applyLanguageHint(prompt.trim(), lang)
         val url = validatedUrl(modelId) ?: run {
             CrierLogBus.e(TAG, "Invalid model URL for modelId=$modelId")
             return GeminiAudioResult.Unavailable
         }
 
+        val isDedicatedTtsModel = modelId.contains("tts", ignoreCase = true)
+        val (effectivePrompt, effectiveSystemPrompt) = if (isDedicatedTtsModel && !systemPrompt.isNullOrBlank()) {
+            val inlined = applyLanguageHint(
+                "Instructions: ${systemPrompt.trim()}\n\nNotification text:\n${prompt.trim()}",
+                lang,
+            )
+            inlined to null
+        } else {
+            applyLanguageHint(prompt.trim(), lang) to systemPrompt?.trim()?.ifBlank { null }
+        }
+
         var last: GeminiAudioResult = GeminiAudioResult.Unavailable
         repeat(maxAttempts) { attempt ->
-            val result = synthesizeOnce(url, apiKey.trim(), modelId, spokenPrompt, voiceName, systemPrompt, attempt + 1)
+            val result = synthesizeOnce(
+                url = url,
+                apiKey = apiKey.trim(),
+                modelId = modelId,
+                prompt = effectivePrompt,
+                voiceName = voiceName,
+                systemPrompt = effectiveSystemPrompt,
+                attempt = attempt + 1,
+            )
             last = result
             when (result) {
                 is GeminiAudioResult.Success -> return result
@@ -132,6 +150,24 @@ class GeminiTtsClient(
                 HttpURLConnection.HTTP_BAD_REQUEST -> {
                     val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
                     CrierLogBus.e(TAG, "$requestLogMsg -> HTTP 400 Bad Request", payloadStr, err)
+
+                    if (systemPrompt != null && (err.contains("Developer instruction", ignoreCase = true) || err.contains("systemInstruction", ignoreCase = true))) {
+                        CrierLogBus.i(
+                            TAG,
+                            "Model $modelId rejected developer instruction; falling back to inlining instruction into prompt text and retrying...",
+                        )
+                        val inlinedPrompt = "Instructions: ${systemPrompt.trim()}\n\n$prompt"
+                        return synthesizeOnce(
+                            url = url,
+                            apiKey = apiKey,
+                            modelId = modelId,
+                            prompt = inlinedPrompt,
+                            voiceName = voiceName,
+                            systemPrompt = null,
+                            attempt = attempt,
+                        )
+                    }
+
                     classifyBadRequest(err)
                 }
                 HttpURLConnection.HTTP_NOT_FOUND -> {

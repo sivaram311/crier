@@ -42,6 +42,12 @@ Implemented all identified gaps from review rounds:
 - [x] Added customizable System Prompt / Persona in settings and playground injected into Gemini API `systemInstruction`.
 - [x] Passing full notification text context without early truncation.
 
+## v0.1.6 (Released - TTS model instruction compatibility & configurable notification filters)
+
+- [x] Solved `Developer instruction is not enabled for this model` error for `gemini-3.1-flash-tts-preview`, `gemini-2.5-flash-preview-tts`, and `gemini-2.5-pro-preview-tts` via proactive inlining and auto-recovery fallback.
+- [x] Configurable notification filter toggles for ongoing sticky notifications and foreground services in Settings.
+- [x] Prioritized dedicated TTS models (`gemini-3.1-flash-tts-preview`, etc.) at the top of the model selection list.
+
 ## v0.2.0 (planned)
 
 - **Gemini Live API** wiring (`gemini-2.5-flash-native-audio-preview-09-2025` /

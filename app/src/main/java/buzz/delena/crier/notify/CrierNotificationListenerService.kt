@@ -84,9 +84,11 @@ class CrierNotificationListenerService : NotificationListenerService() {
                 isGroupSummary = groupSummary,
                 isForegroundService = fgs,
                 allowAll = settings.allowAllApps,
+                filterOngoing = settings.filterOngoingNotifications,
+                filterForegroundServices = settings.filterForegroundServices,
             )
         ) {
-            CrierLogBus.d(TAG, "Filtered notification from $pkg (title=$title, allowAll=${settings.allowAllApps}, allowed=${pkg in settings.allowedPackages()}, ongoing=$ongoing, fgs=$fgs)")
+            CrierLogBus.d(TAG, "Filtered notification from $pkg (title=$title, allowAll=${settings.allowAllApps}, allowed=${pkg in settings.allowedPackages()}, ongoing=$ongoing, fgs=$fgs, filterOngoing=${settings.filterOngoingNotifications})")
             return
         }
 

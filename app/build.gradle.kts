@@ -15,8 +15,8 @@ android {
         applicationId = "buzz.delena.crier"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.1.5-town-crier-dev"
+        versionCode = 7
+        versionName = "0.1.6-town-crier-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

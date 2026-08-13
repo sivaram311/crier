@@ -90,6 +90,14 @@ class CrierSettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_ALLOW_ALL_APPS, false)
         set(value) = prefs.edit().putBoolean(KEY_ALLOW_ALL_APPS, value).apply()
 
+    var filterOngoingNotifications: Boolean
+        get() = prefs.getBoolean(KEY_FILTER_ONGOING, true)
+        set(value) = prefs.edit().putBoolean(KEY_FILTER_ONGOING, value).apply()
+
+    var filterForegroundServices: Boolean
+        get() = prefs.getBoolean(KEY_FILTER_FGS, true)
+        set(value) = prefs.edit().putBoolean(KEY_FILTER_FGS, value).apply()
+
     var quietStartMinutes: Int
         get() = prefs.getInt(KEY_QUIET_START, 22 * 60)
         set(value) = prefs.edit().putInt(KEY_QUIET_START, value).apply()
@@ -155,6 +163,8 @@ class CrierSettingsStore(context: Context) {
         private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_SPEAK_WHEN_LOCKED = "speak_when_locked"
         private const val KEY_ALLOW_ALL_APPS = "allow_all_apps"
+        private const val KEY_FILTER_ONGOING = "filter_ongoing"
+        private const val KEY_FILTER_FGS = "filter_fgs"
         private const val KEY_QUIET_START = "quiet_start"
         private const val KEY_QUIET_END = "quiet_end"
         private const val KEY_QUIET_HOURS_ENABLED = "quiet_hours_enabled"

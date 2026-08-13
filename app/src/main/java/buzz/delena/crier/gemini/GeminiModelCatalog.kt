@@ -21,10 +21,16 @@ data class GeminiModelOption(
  */
 object GeminiModelCatalog {
     val DEFAULT_TTS_MODELS = listOf(
-        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (Recommended)", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-3.1-flash-tts-preview", "Gemini 3.1 Flash TTS Preview (Native Audio)", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.5-flash-preview-tts", "Gemini 2.5 Flash Preview TTS", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.5-pro-preview-tts", "Gemini 2.5 Pro Preview TTS", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-flash", "Gemini 2.5 Flash", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-pro", "Gemini 2.5 Pro", GeminiCapability.TTS, true),
-        GeminiModelOption("gemini-2.0-flash-exp", "Gemini 2.0 Flash Experimental", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-3.7-flash", "Gemini 3.7 Flash", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-3.5-flash", "Gemini 3.5 Flash", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-flash-latest", "Gemini Flash Latest", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-pro-latest", "Gemini Pro Latest", GeminiCapability.TTS, true),
     )
 
     private var dynamicTtsModels: List<GeminiModelOption>? = null
@@ -38,7 +44,7 @@ object GeminiModelCatalog {
     )
 
     val LIVE_MODELS = listOf(
-        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (live)", GeminiCapability.LIVE, false),
+        GeminiModelOption("gemini-2.5-flash-native-audio-latest", "Gemini 2.5 Flash Native Audio Latest", GeminiCapability.LIVE, false),
         GeminiModelOption("gemini-2.5-flash-native-audio-preview-09-2025", "Gemini 2.5 Flash Live (native audio)", GeminiCapability.LIVE, false),
         GeminiModelOption("gemini-live-2.5-flash-preview", "Gemini Live 2.5 Flash (half-cascade)", GeminiCapability.LIVE, false),
     )
@@ -47,8 +53,8 @@ object GeminiModelCatalog {
         get() = TTS_MODELS + STT_MODELS + LIVE_MODELS
 
     val VOICES = listOf(
-        "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda",
-        "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus",
+        "Puck", "Charon", "Kore", "Fenrir", "Aoede", "Leda",
+        "Orus", "Zephyr", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus",
     )
 
     val LANGUAGES = listOf(
@@ -97,10 +103,10 @@ object GeminiModelCatalog {
                         }
 
                         val id = rawName.removePrefix("models/")
-                        if (methodsList.contains("generateContent") && (id.contains("flash") || id.contains("pro") || id.contains("gemini"))) {
+                        if (methodsList.contains("generateContent") && !id.contains("image") && !id.contains("embedding") && !id.contains("gemma")) {
                             list += GeminiModelOption(
                                 id = id,
-                                label = if (displayName.isNotBlank()) displayName else id,
+                                label = if (displayName.isNotBlank()) "$displayName ($id)" else id,
                                 capability = GeminiCapability.TTS,
                                 wiredInThisBuild = true,
                             )
@@ -109,8 +115,11 @@ object GeminiModelCatalog {
 
                     if (list.isNotEmpty()) {
                         val sorted = list.sortedWith(
-                            compareByDescending<GeminiModelOption> { it.id.contains("2.0-flash") }
-                                .thenByDescending { it.id.contains("2.5-flash") }
+                            compareByDescending<GeminiModelOption> { it.id.contains("tts", ignoreCase = true) }
+                                .thenByDescending { it.id.contains("3.1-flash", ignoreCase = true) }
+                                .thenByDescending { it.id.contains("2.5-flash", ignoreCase = true) }
+                                .thenByDescending { it.id.contains("2.0-flash", ignoreCase = true) }
+                                .thenByDescending { it.id.contains("3.7-flash", ignoreCase = true) }
                                 .thenBy { it.label }
                         )
                         dynamicTtsModels = sorted

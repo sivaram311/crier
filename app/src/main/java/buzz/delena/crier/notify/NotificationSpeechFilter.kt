@@ -11,10 +11,14 @@ object NotificationSpeechFilter {
         isGroupSummary: Boolean,
         isForegroundService: Boolean,
         allowAll: Boolean = false,
+        filterOngoing: Boolean = true,
+        filterForegroundServices: Boolean = true,
     ): Boolean {
         if (packageName == ownPackage) return false
         if (!allowAll && (allowedPackages.isEmpty() || packageName !in allowedPackages)) return false
-        if (isOngoing || isGroupSummary || isForegroundService) return false
+        if (isGroupSummary) return false
+        if (filterOngoing && isOngoing) return false
+        if (filterForegroundServices && isForegroundService) return false
         val titleOk = !title.isNullOrBlank()
         val textOk = !text.isNullOrBlank()
         return titleOk || textOk

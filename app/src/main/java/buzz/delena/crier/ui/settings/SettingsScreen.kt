@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import buzz.delena.crier.gemini.GeminiModelCatalog
@@ -69,6 +68,8 @@ fun SettingsScreen(
     var language by remember { mutableStateOf(settings.languageCode) }
     var systemPrompt by remember { mutableStateOf(settings.systemPrompt) }
     var speakWhenLocked by remember { mutableStateOf(settings.speakWhenLocked) }
+    var filterOngoing by remember { mutableStateOf(settings.filterOngoingNotifications) }
+    var filterFgs by remember { mutableStateOf(settings.filterForegroundServices) }
     var allowAllApps by remember { mutableStateOf(settings.allowAllApps) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -280,6 +281,8 @@ fun SettingsScreen(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Notification Filters & Privacy", style = MaterialTheme.typography.titleMedium)
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -297,6 +300,48 @@ fun SettingsScreen(
                             onCheckedChange = {
                                 speakWhenLocked = it
                                 settings.speakWhenLocked = it
+                            },
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Filter ongoing notifications", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Ignore sticky notifications (e.g. downloads, Google Assistant Live)",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Switch(
+                            checked = filterOngoing,
+                            onCheckedChange = {
+                                filterOngoing = it
+                                settings.filterOngoingNotifications = it
+                            },
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Filter foreground service notifications", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Ignore persistent background service status notifications",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Switch(
+                            checked = filterFgs,
+                            onCheckedChange = {
+                                filterFgs = it
+                                settings.filterForegroundServices = it
                             },
                         )
                     }
