@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -112,6 +113,84 @@ fun SettingsScreen() {
                 }
             }
         }
+
+        item {
+            var quietEnabled by remember { mutableStateOf(settings.quietHoursEnabled) }
+            var quietStartMinutes by remember { mutableStateOf(settings.quietStartMinutes) }
+            var quietEndMinutes by remember { mutableStateOf(settings.quietEndMinutes) }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Quiet Hours", style = MaterialTheme.typography.titleMedium)
+                            Text("Mute notification speech during these hours", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Switch(
+                            checked = quietEnabled,
+                            onCheckedChange = {
+                                quietEnabled = it
+                                settings.quietHoursEnabled = it
+                            }
+                        )
+                    }
+                    if (quietEnabled) {
+                        val hoursOptions = remember { (0..23).map { String.format("%02d", it) to String.format("%02d", it) } }
+                        val minutesOptions = remember { (0..59).map { String.format("%02d", it) to String.format("%02d", it) } }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            LabeledDropdown(
+                                label = "Start Hour",
+                                options = hoursOptions,
+                                selected = String.format("%02d", quietStartMinutes / 60),
+                                onSelected = { h ->
+                                    quietStartMinutes = h.toInt() * 60 + (quietStartMinutes % 60)
+                                    settings.quietStartMinutes = quietStartMinutes
+                                }
+                            )
+                            LabeledDropdown(
+                                label = "Start Minute",
+                                options = minutesOptions,
+                                selected = String.format("%02d", quietStartMinutes % 60),
+                                onSelected = { m ->
+                                    quietStartMinutes = (quietStartMinutes / 60) * 60 + m.toInt()
+                                    settings.quietStartMinutes = quietStartMinutes
+                                }
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            LabeledDropdown(
+                                label = "End Hour",
+                                options = hoursOptions,
+                                selected = String.format("%02d", quietEndMinutes / 60),
+                                onSelected = { h ->
+                                    quietEndMinutes = h.toInt() * 60 + (quietEndMinutes % 60)
+                                    settings.quietEndMinutes = quietEndMinutes
+                                }
+                            )
+                            LabeledDropdown(
+                                label = "End Minute",
+                                options = minutesOptions,
+                                selected = String.format("%02d", quietEndMinutes % 60),
+                                onSelected = { m ->
+                                    quietEndMinutes = (quietEndMinutes / 60) * 60 + m.toInt()
+                                    settings.quietEndMinutes = quietEndMinutes
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
 
         item {
             Text("Which apps may speak", style = MaterialTheme.typography.titleMedium)

@@ -9,6 +9,7 @@ data class CrierStatus(
     val callActive: Boolean = false,
     val queuedCount: Int = 0,
     val lastSpokenLine: String? = null,
+    val lastError: String? = null,
 )
 
 /** In-process, UI-observable status so the Home screen reflects the live pipeline state. */

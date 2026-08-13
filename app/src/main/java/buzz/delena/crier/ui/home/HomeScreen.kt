@@ -1,6 +1,8 @@
 package buzz.delena.crier.ui.home
 
+import android.content.Intent
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +89,11 @@ fun HomeScreen(
     val rows = buildList {
         add(StatusRow("Notification listener", if (status.listenerConnected) "Connected" else "Not connected", status.listenerConnected))
         add(StatusRow("Background relay", if (status.foregroundServiceRunning) "Running" else "Stopped", status.foregroundServiceRunning))
+        status.lastError?.let { err ->
+            add(StatusRow("Last error", err, false))
+        }
+        val allowedEmpty = settings.allowedPackages().isEmpty()
+        add(StatusRow("Allowed apps", if (allowedEmpty) "None (tap Settings)" else "${settings.allowedPackages().size} apps allowed", !allowedEmpty))
         add(StatusRow("Call state", if (status.callActive) "On a call — queueing" else "Idle", !status.callActive))
         add(StatusRow("Queued notifications", status.queuedCount.toString(), status.queuedCount == 0))
         add(StatusRow("Notification access", if (hasNotificationAccess) "Granted" else "Not granted", hasNotificationAccess))
@@ -96,6 +103,7 @@ fun HomeScreen(
         }
         add(StatusRow("Battery optimization", if (ignoringBatteryOpt) "Exempted" else "Not exempted", ignoringBatteryOpt))
     }
+
 
     LazyColumn(
         modifier = Modifier
@@ -129,11 +137,40 @@ fun HomeScreen(
                         onCheckedChange = {
                             enabled = it
                             settings.assistantEnabled = it
+                            val serviceIntent = Intent(context, CrierForegroundService::class.java)
+                            if (it) {
+                                ContextCompat.startForegroundService(context, serviceIntent)
+                            } else {
+                                context.stopService(serviceIntent)
+                            }
                         },
                     )
                 }
             }
         }
+
+        if (settings.allowedPackages().isEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "No apps allowed to speak",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            "Go to Settings and check which apps are allowed to speak their notifications, otherwise the app will remain silent.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
 
         items(rows) { row ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

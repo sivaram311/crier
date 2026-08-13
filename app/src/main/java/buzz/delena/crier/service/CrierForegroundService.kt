@@ -102,7 +102,10 @@ class CrierForegroundService : Service() {
     private fun speak(request: SpeechRequest) {
         runCatching {
             val apiKey = settings.apiKey()
-            if (apiKey.isNullOrBlank()) return@runCatching
+            if (apiKey.isNullOrBlank()) {
+                CrierStatusBus.update { it.copy(lastError = "API key is not set") }
+                return@runCatching
+            }
             val result = ttsClient.synthesize(
                 apiKey = apiKey,
                 model = settings.ttsModel,
@@ -110,11 +113,31 @@ class CrierForegroundService : Service() {
                 voice = settings.voiceName,
                 languageCode = settings.languageCode,
             )
-            if (result is GeminiAudioResult.Success) {
-                audioPlayer.play(result.pcm, result.sampleRateHz)
-                CrierStatusBus.update { it.copy(lastSpokenLine = request.line) }
+            when (result) {
+                is GeminiAudioResult.Success -> {
+                    audioPlayer.play(result.pcm, result.sampleRateHz)
+                    CrierStatusBus.update { it.copy(lastSpokenLine = request.line, lastError = null) }
+                }
+                is GeminiAudioResult.Unauthorized -> {
+                    CrierStatusBus.update { it.copy(lastError = "API key rejected (Unauthorized)") }
+                }
+                is GeminiAudioResult.ModelUnavailable -> {
+                    CrierStatusBus.update { it.copy(lastError = "Model unavailable for this key") }
+                }
+                is GeminiAudioResult.Timeout -> {
+                    CrierStatusBus.update { it.copy(lastError = "Request timed out") }
+                }
+                is GeminiAudioResult.Malformed -> {
+                    CrierStatusBus.update { it.copy(lastError = "Malformed response from Gemini API") }
+                }
+                is GeminiAudioResult.Unavailable -> {
+                    CrierStatusBus.update { it.copy(lastError = "Service unavailable") }
+                }
             }
-        }.onFailure { e -> Log.w(TAG, "speak_failed", e) }
+        }.onFailure { e ->
+            Log.w(TAG, "speak_failed", e)
+            CrierStatusBus.update { it.copy(lastError = e.localizedMessage ?: e.message ?: "Unknown error") }
+        }
     }
 
     private fun buildNotification(): Notification {

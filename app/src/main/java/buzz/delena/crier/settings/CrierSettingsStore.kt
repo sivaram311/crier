@@ -84,6 +84,11 @@ class CrierSettingsStore(context: Context) {
         get() = prefs.getInt(KEY_QUIET_END, 7 * 60)
         set(value) = prefs.edit().putInt(KEY_QUIET_END, value).apply()
 
+    var quietHoursEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUIET_HOURS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_QUIET_HOURS_ENABLED, value).apply()
+
+
     fun allowedPackages(): Set<String> =
         prefs.getStringSet(KEY_ALLOW, emptySet())?.toSet().orEmpty()
 
@@ -125,6 +130,7 @@ class CrierSettingsStore(context: Context) {
         private const val KEY_LANGUAGE = "language_code"
         private const val KEY_QUIET_START = "quiet_start"
         private const val KEY_QUIET_END = "quiet_end"
+        private const val KEY_QUIET_HOURS_ENABLED = "quiet_hours_enabled"
         private const val KEY_ALLOW = "allowed_packages"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEYSTORE_ALIAS = "crier_gemini_api_key"

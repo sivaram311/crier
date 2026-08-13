@@ -18,7 +18,9 @@ class CrierNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         CrierStatusBus.update { it.copy(listenerConnected = true) }
-        ContextCompat.startForegroundService(this, Intent(this, CrierForegroundService::class.java))
+        if (settings.assistantEnabled) {
+            ContextCompat.startForegroundService(this, Intent(this, CrierForegroundService::class.java))
+        }
     }
 
     override fun onListenerDisconnected() {
@@ -33,7 +35,7 @@ class CrierNotificationListenerService : NotificationListenerService() {
 
         val now = Calendar.getInstance()
         val minutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        if (QuietHours.isQuiet(minutes, settings.quietStartMinutes, settings.quietEndMinutes)) return
+        if (settings.quietHoursEnabled && QuietHours.isQuiet(minutes, settings.quietStartMinutes, settings.quietEndMinutes)) return
 
         val n = notification.notification
         val keyguardManager = getSystemService(KeyguardManager::class.java)
