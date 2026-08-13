@@ -46,7 +46,7 @@ Sideload the debug APK from a tagged GitHub release:
 
 ```powershell
 curl.exe -L -o crier-0.1.0-town-crier-dev-debug.apk `
-  https://github.com/sivaram311/crier/releases/download/v0.1.0/crier-0.1.0-town-crier-dev-debug.apk
+  https://github.com/sivaram311/crier/releases/download/v0.1.0-town-crier-dev/crier-0.1.0-town-crier-dev-debug.apk
 adb install crier-0.1.0-town-crier-dev-debug.apk
 ```
 
