@@ -21,5 +21,6 @@ Versions chosen to match forgecity-launcher's proven-working pins (AGP/Kotlin/KS
 Compose BOM/Room/WorkManager) rather than re-researching compatible versions from
 scratch — same fleet, same known-good combination.
 
-Per `E:\MyAgent\workflow\CONSCIOUS.md` rule 13, this app's release git tag is
-recorded in `E:\MyAgent\workflow\deps\DEPENDENCY-MATRIX.md` at release time.
+Not listed in `E:\MyAgent\workflow\deps\DEPENDENCY-MATRIX.md` — that matrix tracks
+shared-service pins (CSS, etc.); this app has none, same as forgecity-launcher and
+monolaunch. The release tag itself is recorded in `E:\MyAgent\workflow\activity\ACTIVITY-LOG.md`.
