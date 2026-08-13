@@ -24,12 +24,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun CrierRoot() {
     CrierTheme {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .imePadding()
-        ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
             CrierNavHost()
         }
     }

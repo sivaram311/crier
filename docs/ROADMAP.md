@@ -22,6 +22,10 @@ Implemented all identified gaps from review rounds:
 - [x] Changed the default TTS model to `gemini-2.0-flash` for native speed, reliability, and cost-effectiveness.
 - [x] Synchronized the active model selected in Settings with the Playground screen and vice-versa, saving selection state directly back to the persistent store.
 
+## v0.1.3 (Released - edge-to-edge layout padding fix)
+
+- [x] Fixed edge-to-edge blank screen issue by moving `systemBarsPadding()` and `imePadding()` layout modifiers from the absolute root `Surface` in `MainActivity.kt` to the individual screen level (`HomeScreen`, `SettingsScreen`, `PlaygroundScreen`, and `AboutScreen`).
+
 ## v0.2.0 (planned)
 
 - **Gemini Live API** wiring (`gemini-2.5-flash-native-audio-preview-09-2025` /

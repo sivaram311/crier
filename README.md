@@ -8,7 +8,7 @@ config, own release cadence.
 Package `buzz.delena.crier`. Sandbox DEV project (see [`docs/OPS.md`](docs/OPS.md)) —
 no host ports, no Postgres, no CSS for this APK.
 
-**Latest:** `v0.1.2-town-crier-dev` · versionCode **3**
+**Latest:** `v0.1.3-town-crier-dev` · versionCode **4**
 
 ## What it does (v0.1.0)
 
@@ -45,11 +45,11 @@ here.
 Sideload the debug APK from a tagged GitHub release:
 
 ```powershell
-curl.exe -L -o crier-0.1.2-town-crier-dev-debug.apk `
-  https://github.com/sivaram311/crier/releases/download/v0.1.2-town-crier-dev/crier-0.1.2-town-crier-dev-debug.apk
-Get-FileHash .\crier-0.1.2-town-crier-dev-debug.apk -Algorithm SHA256
-# expect 203910A407D6AB0DF8B105158EB10C0A39D6CE4DD0562D7927272F98E99D1632
-adb install crier-0.1.2-town-crier-dev-debug.apk
+curl.exe -L -o crier-0.1.3-town-crier-dev-debug.apk `
+  https://github.com/sivaram311/crier/releases/download/v0.1.3-town-crier-dev/crier-0.1.3-town-crier-dev-debug.apk
+Get-FileHash .\crier-0.1.3-town-crier-dev-debug.apk -Algorithm SHA256
+# expect FB07267EE77D89084C317643754367044CC4C63767FCEB9A14C7BCF0EDA16C62
+adb install crier-0.1.3-town-crier-dev-debug.apk
 ```
 
 Then grant notification access (Home screen has a shortcut button), add a Gemini
