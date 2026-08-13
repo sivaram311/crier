@@ -18,15 +18,21 @@ data class GeminiModelOption(
  */
 object GeminiModelCatalog {
     val TTS_MODELS = listOf(
+        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.0-flash-lite-preview-02-05", "Gemini 2.0 Flash Lite (preview)", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-flash-preview-tts", "Gemini 2.5 Flash (TTS preview)", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-pro-preview-tts", "Gemini 2.5 Pro (TTS preview)", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.5-flash", "Gemini 2.5 Flash", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.5-pro", "Gemini 2.5 Pro", GeminiCapability.TTS, true),
     )
 
     val STT_MODELS = listOf(
+        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (transcription)", GeminiCapability.STT, false),
         GeminiModelOption("gemini-2.5-flash", "Gemini 2.5 Flash (transcription)", GeminiCapability.STT, false),
     )
 
     val LIVE_MODELS = listOf(
+        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (live)", GeminiCapability.LIVE, false),
         GeminiModelOption("gemini-2.5-flash-native-audio-preview-09-2025", "Gemini 2.5 Flash Live (native audio)", GeminiCapability.LIVE, false),
         GeminiModelOption("gemini-live-2.5-flash-preview", "Gemini Live 2.5 Flash (half-cascade)", GeminiCapability.LIVE, false),
     )

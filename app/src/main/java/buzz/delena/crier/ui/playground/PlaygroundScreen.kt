@@ -41,7 +41,12 @@ fun PlaygroundScreen() {
     val settings = remember { CrierSettingsStore(context) }
     val scope = rememberCoroutineScope()
 
-    var selectedModel by remember { mutableStateOf<GeminiModelOption>(GeminiModelCatalog.TTS_MODELS.first()) }
+    var selectedModel by remember {
+        val saved = settings.ttsModel
+        val option = GeminiModelCatalog.TTS_MODELS.firstOrNull { it.id == saved }
+            ?: GeminiModelCatalog.TTS_MODELS.first()
+        mutableStateOf(option)
+    }
     var voice by remember { mutableStateOf(settings.voiceName) }
     var language by remember { mutableStateOf(settings.languageCode) }
     var prompt by remember { mutableStateOf("Hey, this is Crier checking in.") }
@@ -64,7 +69,10 @@ fun PlaygroundScreen() {
 
         item { Text("Text-to-speech", style = MaterialTheme.typography.titleMedium) }
         items(GeminiModelCatalog.TTS_MODELS) { option ->
-            ModelRow(option, selected = selectedModel.id == option.id) { selectedModel = option }
+            ModelRow(option, selected = selectedModel.id == option.id) {
+                selectedModel = option
+                settings.ttsModel = option.id
+            }
         }
 
         item { Text("Speech-to-text", style = MaterialTheme.typography.titleMedium) }

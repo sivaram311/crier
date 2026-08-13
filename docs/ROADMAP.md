@@ -16,6 +16,12 @@ Implemented all identified gaps from review rounds:
 - [x] `CrierNotificationListenerService.onListenerConnected` only starts the foreground service when `assistantEnabled` is true.
 - [x] A release-signed (`debuggable=false`) build setup.
 
+## v0.1.2 (Released - model catalog and synchronization polish)
+
+- [x] Expanded `GeminiModelCatalog.kt` to include standard production and preview models: `gemini-2.0-flash`, `gemini-2.0-flash-lite-preview-02-05` (Flash Lite), `gemini-2.5-flash`, and `gemini-2.5-pro`.
+- [x] Changed the default TTS model to `gemini-2.0-flash` for native speed, reliability, and cost-effectiveness.
+- [x] Synchronized the active model selected in Settings with the Playground screen and vice-versa, saving selection state directly back to the persistent store.
+
 ## v0.2.0 (planned)
 
 - **Gemini Live API** wiring (`gemini-2.5-flash-native-audio-preview-09-2025` /

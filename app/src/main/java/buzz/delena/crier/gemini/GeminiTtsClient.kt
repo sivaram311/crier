@@ -178,7 +178,7 @@ class GeminiTtsClient(
     }
 
     companion object {
-        const val DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+        const val DEFAULT_TTS_MODEL = "gemini-2.0-flash"
         const val DEFAULT_VOICE = "Kore"
         const val DEFAULT_LANGUAGE = "en-US"
 
