@@ -23,7 +23,7 @@ class NotificationSpeechFilterTest {
     }
 
     @Test
-    fun `not allowlisted does not speak`() {
+    fun `not allowlisted does not speak when allowAll is false`() {
         assertFalse(
             NotificationSpeechFilter.shouldSpeak(
                 packageName = "com.example.chat",
@@ -34,6 +34,24 @@ class NotificationSpeechFilterTest {
                 isOngoing = false,
                 isGroupSummary = false,
                 isForegroundService = false,
+                allowAll = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `allowAll true speaks even when allowlist is empty`() {
+        assertTrue(
+            NotificationSpeechFilter.shouldSpeak(
+                packageName = "com.example.chat",
+                ownPackage = "buzz.delena.crier",
+                allowedPackages = emptySet(),
+                title = "t",
+                text = "b",
+                isOngoing = false,
+                isGroupSummary = false,
+                isForegroundService = false,
+                allowAll = true,
             ),
         )
     }

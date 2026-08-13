@@ -26,6 +26,14 @@ Implemented all identified gaps from review rounds:
 
 - [x] Fixed edge-to-edge blank screen issue by moving `systemBarsPadding()` and `imePadding()` layout modifiers from the absolute root `Surface` in `MainActivity.kt` to the individual screen level (`HomeScreen`, `SettingsScreen`, `PlaygroundScreen`, and `AboutScreen`).
 
+## v0.1.4 (Released - lock-screen relay, streaming audio decoder, navigation & allowlist UX)
+
+- [x] Added `speakWhenLocked` setting enabling Crier to speak incoming notifications when screen is locked/in pocket.
+- [x] Enhanced `GeminiAudioPlayer` with robust WAV container parsing, stereo/mono support, streaming `AudioTrack` mode, and routing to media stream.
+- [x] Added `allowAllApps` toggle, Select All / Clear All quick actions, and real-time app search filter in Settings.
+- [x] Added in-app Back button navigation across Settings, Playground, and About screens.
+- [x] Added API Key missing banner with direct action to Settings on Home screen.
+
 ## v0.2.0 (planned)
 
 - **Gemini Live API** wiring (`gemini-2.5-flash-native-audio-preview-09-2025` /

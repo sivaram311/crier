@@ -4,11 +4,13 @@ import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,11 +20,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,7 +40,7 @@ import buzz.delena.crier.gemini.GeminiModelCatalog
 import buzz.delena.crier.settings.CrierSettingsStore
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember { CrierSettingsStore(context) }
 
@@ -45,6 +49,9 @@ fun SettingsScreen() {
     var model by remember { mutableStateOf(settings.ttsModel) }
     var voice by remember { mutableStateOf(settings.voiceName) }
     var language by remember { mutableStateOf(settings.languageCode) }
+    var speakWhenLocked by remember { mutableStateOf(settings.speakWhenLocked) }
+    var allowAllApps by remember { mutableStateOf(settings.allowAllApps) }
+    var searchQuery by remember { mutableStateOf("") }
 
     val installedApps = remember {
         val pm = context.packageManager
@@ -57,6 +64,17 @@ fun SettingsScreen() {
     }
     var allowed by remember { mutableStateOf(settings.allowedPackages()) }
 
+    val filteredApps = remember(searchQuery, installedApps) {
+        if (searchQuery.isBlank()) {
+            installedApps
+        } else {
+            installedApps.filter {
+                it.second.contains(searchQuery, ignoreCase = true) ||
+                    it.first.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -65,7 +83,18 @@ fun SettingsScreen() {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { Text("Settings", style = MaterialTheme.typography.headlineMedium) }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onBack) {
+                    Text("← Back")
+                }
+                Spacer(Modifier.width(12.dp))
+                Text("Settings", style = MaterialTheme.typography.headlineMedium)
+            }
+        }
 
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -74,21 +103,32 @@ fun SettingsScreen() {
                     Text(
                         if (apiKeySaved) "Saved (encrypted, on-device only)." else "Not set yet.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = if (apiKeySaved) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                     )
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
                         label = { Text("Paste API key") },
+                        placeholder = { Text("AIzaSy...") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Button(onClick = {
-                        if (settings.saveApiKey(apiKey)) {
-                            apiKeySaved = settings.hasApiKey
-                            apiKey = ""
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            if (settings.saveApiKey(apiKey)) {
+                                apiKeySaved = settings.hasApiKey
+                                apiKey = ""
+                            }
+                        }) { Text("Save key") }
+
+                        if (apiKeySaved) {
+                            OutlinedButton(onClick = {
+                                settings.saveApiKey("")
+                                apiKeySaved = false
+                            }) { Text("Clear key") }
                         }
-                    }) { Text("Save key") }
+                    }
                 }
             }
         }
@@ -96,7 +136,7 @@ fun SettingsScreen() {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Voice", style = MaterialTheme.typography.titleMedium)
+                    Text("Voice & Speech", style = MaterialTheme.typography.titleMedium)
                     LabeledDropdown(
                         label = "Model",
                         options = GeminiModelCatalog.TTS_MODELS.map { it.id to it.label },
@@ -120,17 +160,44 @@ fun SettingsScreen() {
         }
 
         item {
-            var quietEnabled by remember { mutableStateOf(settings.quietHoursEnabled) }
-            var quietStartMinutes by remember { mutableStateOf(settings.quietStartMinutes) }
-            var quietEndMinutes by remember { mutableStateOf(settings.quietEndMinutes) }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Speak when screen is locked", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Read notifications aloud when device is locked/in pocket",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Switch(
+                            checked = speakWhenLocked,
+                            onCheckedChange = {
+                                speakWhenLocked = it
+                                settings.speakWhenLocked = it
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            var quietEnabled by remember { mutableStateOf(settings.quietHoursEnabled) }
+            var quietStartMinutes by remember { mutableIntStateOf(settings.quietStartMinutes) }
+            var quietEndMinutes by remember { mutableIntStateOf(settings.quietEndMinutes) }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("Quiet Hours", style = MaterialTheme.typography.titleMedium)
                             Text("Mute notification speech during these hours", style = MaterialTheme.typography.bodyMedium)
                         }
@@ -139,7 +206,7 @@ fun SettingsScreen() {
                             onCheckedChange = {
                                 quietEnabled = it
                                 settings.quietHoursEnabled = it
-                            }
+                            },
                         )
                     }
                     if (quietEnabled) {
@@ -147,7 +214,7 @@ fun SettingsScreen() {
                         val minutesOptions = remember { (0..59).map { String.format("%02d", it) to String.format("%02d", it) } }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             LabeledDropdown(
                                 label = "Start Hour",
@@ -156,7 +223,7 @@ fun SettingsScreen() {
                                 onSelected = { h ->
                                     quietStartMinutes = h.toInt() * 60 + (quietStartMinutes % 60)
                                     settings.quietStartMinutes = quietStartMinutes
-                                }
+                                },
                             )
                             LabeledDropdown(
                                 label = "Start Minute",
@@ -165,12 +232,12 @@ fun SettingsScreen() {
                                 onSelected = { m ->
                                     quietStartMinutes = (quietStartMinutes / 60) * 60 + m.toInt()
                                     settings.quietStartMinutes = quietStartMinutes
-                                }
+                                },
                             )
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             LabeledDropdown(
                                 label = "End Hour",
@@ -179,7 +246,7 @@ fun SettingsScreen() {
                                 onSelected = { h ->
                                     quietEndMinutes = h.toInt() * 60 + (quietEndMinutes % 60)
                                     settings.quietEndMinutes = quietEndMinutes
-                                }
+                                },
                             )
                             LabeledDropdown(
                                 label = "End Minute",
@@ -188,7 +255,7 @@ fun SettingsScreen() {
                                 onSelected = { m ->
                                     quietEndMinutes = (quietEndMinutes / 60) * 60 + m.toInt()
                                     settings.quietEndMinutes = quietEndMinutes
-                                }
+                                },
                             )
                         }
                     }
@@ -196,24 +263,91 @@ fun SettingsScreen() {
             }
         }
 
-
         item {
-            Text("Which apps may speak", style = MaterialTheme.typography.titleMedium)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Allow all apps", style = MaterialTheme.typography.titleMedium)
+                            Text("Speak notifications from every installed app", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Switch(
+                            checked = allowAllApps,
+                            onCheckedChange = {
+                                allowAllApps = it
+                                settings.allowAllApps = it
+                            },
+                        )
+                    }
+
+                    if (!allowAllApps) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val allPkgs = installedApps.map { it.first }
+                                    settings.setAllPackagesAllowed(allPkgs)
+                                    allowed = settings.allowedPackages()
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("Select All")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    settings.clearAllAllowedPackages()
+                                    allowed = emptySet()
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text("Clear All")
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("Search installed apps") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                    }
+                }
+            }
         }
 
-        items(installedApps) { (pkg, label) ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 8.dp))
-                Switch(
-                    checked = pkg in allowed,
-                    onCheckedChange = { checked ->
-                        settings.setPackageAllowed(pkg, checked)
-                        allowed = settings.allowedPackages()
-                    },
+        if (!allowAllApps) {
+            item {
+                Text(
+                    "App Allowlist (${allowed.size} of ${installedApps.size} enabled)",
+                    style = MaterialTheme.typography.titleMedium,
                 )
+            }
+
+            items(filteredApps, key = { it.first }) { (pkg, label) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(vertical = 6.dp)) {
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                        Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = pkg in allowed,
+                        onCheckedChange = { checked ->
+                            settings.setPackageAllowed(pkg, checked)
+                            allowed = settings.allowedPackages()
+                        },
+                    )
+                }
             }
         }
     }

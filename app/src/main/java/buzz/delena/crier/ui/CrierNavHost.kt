@@ -27,8 +27,14 @@ fun CrierNavHost(navController: NavHostController = rememberNavController()) {
                 onOpenAbout = { navController.navigate(Routes.ABOUT) },
             )
         }
-        composable(Routes.SETTINGS) { SettingsScreen() }
-        composable(Routes.PLAYGROUND) { PlaygroundScreen() }
-        composable(Routes.ABOUT) { AboutScreen() }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.PLAYGROUND) {
+            PlaygroundScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = { navController.popBackStack() })
+        }
     }
 }

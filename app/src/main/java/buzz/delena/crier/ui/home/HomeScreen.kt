@@ -2,25 +2,25 @@ package buzz.delena.crier.ui.home
 
 import android.content.Intent
 import android.os.Build
-import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import buzz.delena.crier.BuildInfo
 import buzz.delena.crier.notify.NotificationAccess
@@ -57,11 +58,6 @@ fun HomeScreen(
     val status by CrierStatusBus.status.collectAsState()
     var enabled by remember { mutableStateOf(settings.assistantEnabled) }
 
-    // System permission screens (notification access, battery exemption) and the
-    // runtime permission dialog below are all external to this composable, so a
-    // one-shot `remember` would keep showing stale "Not granted" after the user
-    // comes back having granted them. Bumping this on every resume forces the
-    // `remember(resumeTick)` reads below to recompute.
     var resumeTick by remember { mutableIntStateOf(0) }
     LifecycleResumeEffect(Unit) {
         resumeTick++
@@ -72,9 +68,6 @@ fun HomeScreen(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { results ->
         resumeTick++
-        // READ_PHONE_STATE only takes effect if CallStateGate re-registers with
-        // it; a running service registered (and silently failed) before this
-        // grant, so restart it rather than leave call-aware queueing dead.
         if (settings.assistantEnabled && results[android.Manifest.permission.READ_PHONE_STATE] == true) {
             runCatching { CrierForegroundService.restart(context) }
         }
@@ -88,15 +81,25 @@ fun HomeScreen(
     val ignoringBatteryOpt = remember(resumeTick) { BatteryOptimization.isIgnoringOptimizations(context) }
     val hasPhoneState = remember(resumeTick) { RuntimeGrants.hasReadPhoneState(context) }
     val hasPostNotifications = remember(resumeTick) { RuntimeGrants.hasPostNotifications(context) }
+    val hasApiKey = remember(resumeTick) { settings.hasApiKey }
 
     val rows = buildList {
         add(StatusRow("Notification listener", if (status.listenerConnected) "Connected" else "Not connected", status.listenerConnected))
         add(StatusRow("Background relay", if (status.foregroundServiceRunning) "Running" else "Stopped", status.foregroundServiceRunning))
+        add(StatusRow("Gemini API key", if (hasApiKey) "Configured" else "Not set", hasApiKey))
         status.lastError?.let { err ->
             add(StatusRow("Last error", err, false))
         }
-        val allowedEmpty = settings.allowedPackages().isEmpty()
-        add(StatusRow("Allowed apps", if (allowedEmpty) "None (tap Settings)" else "${settings.allowedPackages().size} apps allowed", !allowedEmpty))
+        val allowedEmpty = !settings.allowAllApps && settings.allowedPackages().isEmpty()
+        val appsLabel = if (settings.allowAllApps) {
+            "All apps allowed"
+        } else if (allowedEmpty) {
+            "None (tap Settings)"
+        } else {
+            "${settings.allowedPackages().size} apps allowed"
+        }
+        add(StatusRow("Allowed apps", appsLabel, !allowedEmpty))
+        add(StatusRow("Speak when locked", if (settings.speakWhenLocked) "Enabled" else "Muted on lock screen", true))
         add(StatusRow("Call state", if (status.callActive) "On a call — queueing" else "Idle", !status.callActive))
         add(StatusRow("Queued notifications", status.queuedCount.toString(), status.queuedCount == 0))
         add(StatusRow("Notification access", if (hasNotificationAccess) "Granted" else "Not granted", hasNotificationAccess))
@@ -106,7 +109,6 @@ fun HomeScreen(
         }
         add(StatusRow("Battery optimization", if (ignoringBatteryOpt) "Exempted" else "Not exempted", ignoringBatteryOpt))
     }
-
 
     LazyColumn(
         modifier = Modifier
@@ -133,7 +135,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text("Relay enabled", style = MaterialTheme.typography.titleMedium)
                         Text("Speak notifications as they arrive", style = MaterialTheme.typography.bodyMedium)
                     }
@@ -154,28 +156,55 @@ fun HomeScreen(
             }
         }
 
-        if (settings.allowedPackages().isEmpty()) {
+        if (!hasApiKey) {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Gemini API key required",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            "Crier needs a Google Gemini API key to synthesize voice. Paste your API key in Settings to get started.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Button(onClick = onOpenSettings) {
+                            Text("Enter API Key in Settings")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!settings.allowAllApps && settings.allowedPackages().isEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "No apps allowed to speak",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
-                            "Go to Settings and check which apps are allowed to speak their notifications, otherwise the app will remain silent.",
+                            "Select which apps (e.g. WhatsApp, Messages, Slack) are allowed to speak their notifications, otherwise Crier will remain silent.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
+                        Button(onClick = onOpenSettings) {
+                            Text("Configure Allowed Apps")
+                        }
                     }
                 }
             }
         }
-
 
         items(rows) { row ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -197,7 +226,10 @@ fun HomeScreen(
 
         if (!hasNotificationAccess) {
             item {
-                Button(onClick = { context.startActivity(NotificationAccess.settingsIntent(context)) }) {
+                Button(
+                    onClick = { context.startActivity(NotificationAccess.settingsIntent(context)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Grant notification access")
                 }
             }
@@ -205,7 +237,10 @@ fun HomeScreen(
 
         if (!hasPhoneState || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPostNotifications)) {
             item {
-                Button(onClick = { permissionLauncher.launch(RuntimeGrants.missing(context)) }) {
+                Button(
+                    onClick = { permissionLauncher.launch(RuntimeGrants.missing(context)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Grant phone/notification permissions")
                 }
             }
@@ -213,7 +248,10 @@ fun HomeScreen(
 
         if (!ignoringBatteryOpt) {
             item {
-                Button(onClick = { context.startActivity(BatteryOptimization.requestExemptionIntent(context)) }) {
+                Button(
+                    onClick = { context.startActivity(BatteryOptimization.requestExemptionIntent(context)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Exempt from battery optimization")
                 }
             }
@@ -225,10 +263,10 @@ fun HomeScreen(
             Button(onClick = onOpenPlayground, modifier = Modifier.fillMaxWidth()) { Text("Open Playground") }
         }
         item {
-            Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
+            OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
         }
         item {
-            Button(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth()) { Text("About") }
+            OutlinedButton(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth()) { Text("About") }
         }
     }
 }

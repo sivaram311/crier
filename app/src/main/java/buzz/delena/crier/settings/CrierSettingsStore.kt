@@ -76,6 +76,14 @@ class CrierSettingsStore(context: Context) {
             .ifBlank { GeminiTtsClient.DEFAULT_LANGUAGE }
         set(value) = prefs.edit().putString(KEY_LANGUAGE, value.trim()).apply()
 
+    var speakWhenLocked: Boolean
+        get() = prefs.getBoolean(KEY_SPEAK_WHEN_LOCKED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SPEAK_WHEN_LOCKED, value).apply()
+
+    var allowAllApps: Boolean
+        get() = prefs.getBoolean(KEY_ALLOW_ALL_APPS, false)
+        set(value) = prefs.edit().putBoolean(KEY_ALLOW_ALL_APPS, value).apply()
+
     var quietStartMinutes: Int
         get() = prefs.getInt(KEY_QUIET_START, 22 * 60)
         set(value) = prefs.edit().putInt(KEY_QUIET_START, value).apply()
@@ -85,9 +93,8 @@ class CrierSettingsStore(context: Context) {
         set(value) = prefs.edit().putInt(KEY_QUIET_END, value).apply()
 
     var quietHoursEnabled: Boolean
-        get() = prefs.getBoolean(KEY_QUIET_HOURS_ENABLED, true)
+        get() = prefs.getBoolean(KEY_QUIET_HOURS_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_QUIET_HOURS_ENABLED, value).apply()
-
 
     fun allowedPackages(): Set<String> =
         prefs.getStringSet(KEY_ALLOW, emptySet())?.toSet().orEmpty()
@@ -96,6 +103,14 @@ class CrierSettingsStore(context: Context) {
         val next = allowedPackages().toMutableSet()
         if (allowed) next += packageName else next -= packageName
         prefs.edit().putStringSet(KEY_ALLOW, next).apply()
+    }
+
+    fun setAllPackagesAllowed(packages: Collection<String>) {
+        prefs.edit().putStringSet(KEY_ALLOW, packages.toSet()).apply()
+    }
+
+    fun clearAllAllowedPackages() {
+        prefs.edit().putStringSet(KEY_ALLOW, emptySet()).apply()
     }
 
     private fun secretKey(): SecretKey {
@@ -128,6 +143,8 @@ class CrierSettingsStore(context: Context) {
         private const val KEY_TTS_MODEL = "tts_model"
         private const val KEY_VOICE = "voice_name"
         private const val KEY_LANGUAGE = "language_code"
+        private const val KEY_SPEAK_WHEN_LOCKED = "speak_when_locked"
+        private const val KEY_ALLOW_ALL_APPS = "allow_all_apps"
         private const val KEY_QUIET_START = "quiet_start"
         private const val KEY_QUIET_END = "quiet_end"
         private const val KEY_QUIET_HOURS_ENABLED = "quiet_hours_enabled"

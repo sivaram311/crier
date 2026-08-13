@@ -3,11 +3,13 @@ package buzz.delena.crier.ui.playground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
@@ -15,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -39,7 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Composable
-fun PlaygroundScreen() {
+fun PlaygroundScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember { CrierSettingsStore(context) }
     val scope = rememberCoroutineScope()
@@ -54,6 +57,7 @@ fun PlaygroundScreen() {
     var language by remember { mutableStateOf(settings.languageCode) }
     var prompt by remember { mutableStateOf("Hey, this is Crier checking in.") }
     var status by remember { mutableStateOf<String?>(null) }
+    var isSynthesizing by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -64,7 +68,19 @@ fun PlaygroundScreen() {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Text("Playground", style = MaterialTheme.typography.headlineMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onBack) {
+                    Text("← Back")
+                }
+                Spacer(Modifier.width(12.dp))
+                Text("Playground", style = MaterialTheme.typography.headlineMedium)
+            }
+        }
+
+        item {
             Text(
                 "Try every Gemini voice model this build knows about. TTS runs live; " +
                     "STT and Live API are cataloged for v0.2.0.",
@@ -108,31 +124,41 @@ fun PlaygroundScreen() {
                                 return@Button
                             }
                             status = "Synthesizing…"
+                            isSynthesizing = true
                             scope.launch(Dispatchers.IO) {
-                                val client = GeminiTtsClient()
-                                val result = client.synthesize(
-                                    apiKey = apiKey,
-                                    model = selectedModel.id,
-                                    prompt = prompt,
-                                    voice = voice,
-                                    languageCode = language,
-                                )
-                                client.close()
-                                status = when (result) {
-                                    is GeminiAudioResult.Success -> {
-                                        GeminiAudioPlayer().play(result.pcm, result.sampleRateHz)
-                                        "Played (${result.pcm.size} bytes @ ${result.sampleRateHz}Hz)."
+                                try {
+                                    val client = GeminiTtsClient()
+                                    val result = client.synthesize(
+                                        apiKey = apiKey,
+                                        model = selectedModel.id,
+                                        prompt = prompt,
+                                        voice = voice,
+                                        languageCode = language,
+                                    )
+                                    client.close()
+                                    status = when (result) {
+                                        is GeminiAudioResult.Success -> {
+                                            GeminiAudioPlayer().play(result.pcm, result.sampleRateHz)
+                                            "Played (${result.pcm.size} bytes @ ${result.sampleRateHz}Hz)."
+                                        }
+                                        GeminiAudioResult.Unauthorized -> "API key rejected."
+                                        GeminiAudioResult.ModelUnavailable -> "Model unavailable for this key."
+                                        GeminiAudioResult.Timeout -> "Request timed out."
+                                        GeminiAudioResult.Malformed -> "Malformed response."
+                                        GeminiAudioResult.Unavailable -> "Service unavailable — try again."
                                     }
-                                    GeminiAudioResult.Unauthorized -> "API key rejected."
-                                    GeminiAudioResult.ModelUnavailable -> "Model unavailable for this key."
-                                    GeminiAudioResult.Timeout -> "Request timed out."
-                                    GeminiAudioResult.Malformed -> "Malformed response."
-                                    GeminiAudioResult.Unavailable -> "Service unavailable — try again."
+                                } catch (e: Exception) {
+                                    status = "Error: ${e.message}"
+                                } finally {
+                                    isSynthesizing = false
                                 }
                             }
                         },
+                        enabled = !isSynthesizing,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Speak") }
+                    ) {
+                        Text(if (isSynthesizing) "Synthesizing…" else "Speak")
+                    }
                     status?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 }
             }

@@ -42,9 +42,9 @@ class CrierNotificationListenerService : NotificationListenerService() {
         val locked = keyguardManager?.isKeyguardLocked == true
         val isPublicVisibility = n.visibility == Notification.VISIBILITY_PUBLIC
         val publicVersion = n.publicVersion
-        if (!LockScreenGate.canSpeak(locked, isPublicVisibility, publicVersion != null)) return
+        if (!LockScreenGate.canSpeak(locked, isPublicVisibility, publicVersion != null, settings.speakWhenLocked)) return
 
-        val effective = if (locked && !isPublicVisibility) publicVersion ?: n else n
+        val effective = if (locked && !isPublicVisibility && !settings.speakWhenLocked) publicVersion ?: n else n
         val extras = effective.extras
         val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()
@@ -63,6 +63,7 @@ class CrierNotificationListenerService : NotificationListenerService() {
                 isOngoing = ongoing,
                 isGroupSummary = groupSummary,
                 isForegroundService = fgs,
+                allowAll = settings.allowAllApps,
             )
         ) {
             return
