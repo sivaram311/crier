@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Crier</string>
+    <string name="notify_channel_name">Crier is listening</string>
+    <string name="notify_channel_desc">Keeps the notification voice relay running in the background</string>
+</resources>
