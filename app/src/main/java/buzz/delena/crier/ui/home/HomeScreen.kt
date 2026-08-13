@@ -35,6 +35,7 @@ import buzz.delena.crier.BuildInfo
 import buzz.delena.crier.notify.NotificationAccess
 import buzz.delena.crier.notify.RuntimeGrants
 import buzz.delena.crier.service.BatteryOptimization
+import buzz.delena.crier.service.CrierForegroundService
 import buzz.delena.crier.service.CrierStatusBus
 import buzz.delena.crier.settings.CrierSettingsStore
 
@@ -64,7 +65,15 @@ fun HomeScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { resumeTick++ }
+    ) { results ->
+        resumeTick++
+        // READ_PHONE_STATE only takes effect if CallStateGate re-registers with
+        // it; a running service registered (and silently failed) before this
+        // grant, so restart it rather than leave call-aware queueing dead.
+        if (settings.assistantEnabled && results[android.Manifest.permission.READ_PHONE_STATE] == true) {
+            runCatching { CrierForegroundService.restart(context) }
+        }
+    }
     LaunchedEffect(Unit) {
         val missing = RuntimeGrants.missing(context)
         if (missing.isNotEmpty()) permissionLauncher.launch(missing)

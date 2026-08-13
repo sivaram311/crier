@@ -1,5 +1,6 @@
 package buzz.delena.crier.notify
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.content.Intent
 import android.service.notification.NotificationListenerService
@@ -35,7 +36,14 @@ class CrierNotificationListenerService : NotificationListenerService() {
         if (QuietHours.isQuiet(minutes, settings.quietStartMinutes, settings.quietEndMinutes)) return
 
         val n = notification.notification
-        val extras = n.extras
+        val keyguardManager = getSystemService(KeyguardManager::class.java)
+        val locked = keyguardManager?.isKeyguardLocked == true
+        val isPublicVisibility = n.visibility == Notification.VISIBILITY_PUBLIC
+        val publicVersion = n.publicVersion
+        if (!LockScreenGate.canSpeak(locked, isPublicVisibility, publicVersion != null)) return
+
+        val effective = if (locked && !isPublicVisibility) publicVersion ?: n else n
+        val extras = effective.extras
         val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()
             ?: extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()

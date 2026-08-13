@@ -4,8 +4,11 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.Context
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import buzz.delena.crier.CrierApp
 import buzz.delena.crier.MainActivity
 import buzz.delena.crier.R
@@ -88,20 +91,30 @@ class CrierForegroundService : Service() {
         ready.forEach { speak(it) }
     }
 
+    /**
+     * Runs entirely inside [runCatching]: this is called from the
+     * [CrierPipelineBus] collector coroutine, and an uncaught exception here
+     * (a bad sample rate reaching [GeminiAudioPlayer]'s `AudioTrack`
+     * construction, for example) would otherwise terminate that coroutine
+     * permanently — silently killing the whole relay until the service
+     * restarts, not just failing this one notification.
+     */
     private fun speak(request: SpeechRequest) {
-        val apiKey = settings.apiKey()
-        if (apiKey.isNullOrBlank()) return
-        val result = ttsClient.synthesize(
-            apiKey = apiKey,
-            model = settings.ttsModel,
-            prompt = request.line,
-            voice = settings.voiceName,
-            languageCode = settings.languageCode,
-        )
-        if (result is GeminiAudioResult.Success) {
-            audioPlayer.play(result.pcm, result.sampleRateHz)
-            CrierStatusBus.update { it.copy(lastSpokenLine = request.line) }
-        }
+        runCatching {
+            val apiKey = settings.apiKey()
+            if (apiKey.isNullOrBlank()) return@runCatching
+            val result = ttsClient.synthesize(
+                apiKey = apiKey,
+                model = settings.ttsModel,
+                prompt = request.line,
+                voice = settings.voiceName,
+                languageCode = settings.languageCode,
+            )
+            if (result is GeminiAudioResult.Success) {
+                audioPlayer.play(result.pcm, result.sampleRateHz)
+                CrierStatusBus.update { it.copy(lastSpokenLine = request.line) }
+            }
+        }.onFailure { e -> Log.w(TAG, "speak_failed", e) }
     }
 
     private fun buildNotification(): Notification {
@@ -122,6 +135,21 @@ class CrierForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "CrierForegroundSvc"
         private const val NOTIFICATION_ID = 1001
+
+        /**
+         * [CallStateGate.start] only registers once, at service creation. If
+         * `READ_PHONE_STATE` was denied then, registration silently no-ops
+         * and nothing re-arms it later on its own. Callers (Home, after the
+         * user grants that permission) are responsible for deciding whether
+         * the relay should be running at all — this just restarts it so
+         * `CallStateGate` re-registers with permission now in hand.
+         */
+        fun restart(context: Context) {
+            val intent = Intent(context, CrierForegroundService::class.java)
+            context.stopService(intent)
+            ContextCompat.startForegroundService(context, intent)
+        }
     }
 }

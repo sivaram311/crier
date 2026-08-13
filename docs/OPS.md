@@ -25,7 +25,10 @@
 | `READ_PHONE_STATE` | Call-state detection for queueing (`CallStateGate`) |
 | `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_SPECIAL_USE` | Persistent background relay (Android 14+ foreground service type) |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Ask to be exempted from Doze/App Standby |
-| `RECORD_AUDIO` | Declared ahead of the v0.2.0 STT/Live API playground; unused in v0.1.0 |
+
+`RECORD_AUDIO` is deliberately **not** declared yet — a notification-reader requesting
+microphone access with no working mic feature reads as untrustworthy on Settings ›
+App info. It gets added when v0.2.0's STT/Live API actually uses it, not ahead of time.
 
 ## Release process followed
 

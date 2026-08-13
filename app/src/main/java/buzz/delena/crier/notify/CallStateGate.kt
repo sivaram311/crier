@@ -24,6 +24,14 @@ class CallStateGate(context: Context) {
     private var legacyListener: android.telephony.PhoneStateListener? = null
     private var modernCallback: TelephonyCallback? = null
 
+    /**
+     * Registers for call-state changes AND seeds [isCallActive] from the
+     * *current* state — registration alone only reports future transitions,
+     * so a call already in progress when this is called (e.g. the service
+     * starts mid-call) would otherwise read as idle until the next change.
+     * Safe to call again (e.g. after the user grants `READ_PHONE_STATE` from
+     * a denied state) — [stop] first to avoid double-registering.
+     */
     fun start() {
         val manager = telephonyManager ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -49,6 +57,14 @@ class CallStateGate(context: Context) {
             runCatching {
                 manager.listen(listener, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
             }
+        }
+        seedCurrentState(manager)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun seedCurrentState(manager: TelephonyManager) {
+        runCatching {
+            _isCallActive.value = manager.callState != TelephonyManager.CALL_STATE_IDLE
         }
     }
 

@@ -6,9 +6,13 @@ Notification listener + filter/dedupe/quiet-hours, call-aware speech queue,
 persistent foreground relay, Keystore-encrypted Gemini API key, live TTS playground
 (model/voice/language), About screen with name+version.
 
-## v0.1.1 (near-term polish, from independent code review)
+## v0.1.1 (near-term polish, from two independent code review rounds)
 
-Not blocking the v0.1.0 ship, but flagged by the CONSCIOUS #17 Reviewer as real gaps:
+Not blocking the v0.1.0 ship (the High-severity findings from both rounds — dead
+`READ_PHONE_STATE`, unsynchronized `SpeechQueue`, dropping `SharedFlow`, no
+lock-screen gate, pipeline death on exception, unjustified `RECORD_AUDIO` — were
+fixed before shipping). Remaining flagged gaps, deferred and documented rather than
+silently dropped:
 
 - Quiet-hours on/off switch + time pickers in Settings (currently fixed 22:00–07:00,
   no UI, no way to disable).
@@ -17,6 +21,13 @@ Not blocking the v0.1.0 ship, but flagged by the CONSCIOUS #17 Reviewer as real 
 - Home should explicitly say "pick apps in Settings" when the allowlist is empty
   (currently just silently speaks nothing).
 - Edge-to-edge system-bar/IME padding on the root surface.
+- `CrierNotificationListenerService.onListenerConnected` starts the foreground
+  service even when `assistantEnabled` is false, showing a persistent "Crier is
+  listening" notification with nothing to relay.
+- A release-signed (`debuggable=false`) build for anyone who wants a Gemini key
+  harder to pull via `adb`/`run-as` than the current `assembleDebug` sideload —
+  same debug-APK distribution model as forgecity-launcher today, so treated as an
+  accepted tradeoff for this sandbox release, not a blocker.
 
 ## v0.2.0 (planned)
 
