@@ -1,6 +1,7 @@
 package buzz.delena.crier.gemini
 
 import android.util.Log
+import buzz.delena.crier.log.CrierLogBus
 import java.io.ByteArrayOutputStream
 import java.io.InterruptedIOException
 import java.net.HttpURLConnection
@@ -14,9 +15,6 @@ private const val TAG = "CrierGemini"
 
 /**
  * Gemini native audio TTS via `generateContent` with `responseModalities: ["AUDIO"]`.
- * Adapted from forgecity-launcher's proven GeminiAudioTtsClient — same request
- * shape and response parsing, trimmed of the launcher-specific diagnostics ring
- * buffer in favor of plain Log calls.
  */
 class GeminiTtsClient(
     private val connectTimeoutMs: Int = 8_000,
@@ -33,17 +31,24 @@ class GeminiTtsClient(
         prompt: String,
         voice: String = DEFAULT_VOICE,
         languageCode: String = DEFAULT_LANGUAGE,
+        systemPrompt: String? = null,
     ): GeminiAudioResult {
-        if (closed || apiKey.isBlank() || prompt.isBlank()) return GeminiAudioResult.Unavailable
+        if (closed || apiKey.isBlank() || prompt.isBlank()) {
+            CrierLogBus.w(TAG, "Synthesis aborted: blank API key or prompt", "prompt=$prompt")
+            return GeminiAudioResult.Unavailable
+        }
         val modelId = normalizeTtsModel(model)
         val voiceName = voice.trim().ifBlank { DEFAULT_VOICE }
         val lang = languageCode.trim().ifBlank { DEFAULT_LANGUAGE }
         val spokenPrompt = applyLanguageHint(prompt.trim(), lang)
-        val url = validatedUrl(modelId) ?: return GeminiAudioResult.Unavailable
+        val url = validatedUrl(modelId) ?: run {
+            CrierLogBus.e(TAG, "Invalid model URL for modelId=$modelId")
+            return GeminiAudioResult.Unavailable
+        }
 
         var last: GeminiAudioResult = GeminiAudioResult.Unavailable
         repeat(maxAttempts) { attempt ->
-            val result = synthesizeOnce(url, apiKey.trim(), modelId, spokenPrompt, voiceName, attempt + 1)
+            val result = synthesizeOnce(url, apiKey.trim(), modelId, spokenPrompt, voiceName, systemPrompt, attempt + 1)
             last = result
             when (result) {
                 is GeminiAudioResult.Success -> return result
@@ -72,45 +77,87 @@ class GeminiTtsClient(
         modelId: String,
         prompt: String,
         voiceName: String,
+        systemPrompt: String?,
         attempt: Int,
     ): GeminiAudioResult {
         var connection: HttpsURLConnection? = null
+        val payloadStr = buildRequestBody(prompt, voiceName, systemPrompt)
+        val maskedKey = if (apiKey.length > 8) "${apiKey.take(4)}...${apiKey.takeLast(4)}" else "***"
+        val requestLogMsg = "POST $url (attempt $attempt, model=$modelId, key=$maskedKey)"
+
         return try {
             connection = (url.openConnection() as? HttpsURLConnection)
-                ?: return GeminiAudioResult.Unavailable
+                ?: run {
+                    CrierLogBus.e(TAG, "Failed to open HttpsURLConnection", payloadStr)
+                    return GeminiAudioResult.Unavailable
+                }
             connection.requestMethod = "POST"
             connection.connectTimeout = connectTimeoutMs
             connection.readTimeout = readTimeoutMs
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             connection.setRequestProperty("x-goog-api-key", apiKey)
-            val payload = buildRequestBody(prompt, voiceName).toByteArray(Charsets.UTF_8)
+            val payload = payloadStr.toByteArray(Charsets.UTF_8)
             connection.setFixedLengthStreamingMode(payload.size)
             connection.outputStream.use { it.write(payload) }
+
             val status = connection.responseCode
             Log.d(TAG, "gemini_tts_http status=$status model=$modelId attempt=$attempt")
+
             when (status) {
                 HttpURLConnection.HTTP_OK -> {
-                    val body = readBounded(connection.inputStream) ?: return GeminiAudioResult.Malformed
-                    parseSuccess(body.toString(Charsets.UTF_8))
+                    val bodyBytes = readBounded(connection.inputStream) ?: run {
+                        CrierLogBus.e(TAG, "$requestLogMsg -> HTTP 200 but body exceeded maxResponseBytes", payloadStr)
+                        return GeminiAudioResult.Malformed
+                    }
+                    val bodyStr = bodyBytes.toString(Charsets.UTF_8)
+                    val parsed = parseSuccess(bodyStr)
+                    if (parsed is GeminiAudioResult.Success) {
+                        CrierLogBus.d(
+                            TAG,
+                            "$requestLogMsg -> HTTP 200 OK (${parsed.pcm.size} PCM bytes @ ${parsed.sampleRateHz}Hz, mime=${parsed.mimeType})",
+                            payloadStr,
+                            bodyStr.take(500) + if (bodyStr.length > 500) "... [${bodyStr.length} total chars]" else "",
+                        )
+                    } else {
+                        CrierLogBus.w(TAG, "$requestLogMsg -> HTTP 200 but failed to parse audio", payloadStr, bodyStr)
+                    }
+                    parsed
                 }
-                HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN ->
+                HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN -> {
+                    val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
+                    CrierLogBus.e(TAG, "$requestLogMsg -> HTTP $status Unauthorized/Forbidden", payloadStr, err)
                     GeminiAudioResult.Unauthorized
+                }
                 HttpURLConnection.HTTP_BAD_REQUEST -> {
                     val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
+                    CrierLogBus.e(TAG, "$requestLogMsg -> HTTP 400 Bad Request", payloadStr, err)
                     classifyBadRequest(err)
                 }
-                HttpURLConnection.HTTP_NOT_FOUND -> GeminiAudioResult.ModelUnavailable
-                HttpURLConnection.HTTP_GATEWAY_TIMEOUT, 429 -> GeminiAudioResult.Timeout
-                500, 502, 503 -> GeminiAudioResult.Unavailable
-                else -> GeminiAudioResult.Unavailable
+                HttpURLConnection.HTTP_NOT_FOUND -> {
+                    val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
+                    CrierLogBus.e(TAG, "$requestLogMsg -> HTTP 404 Model Not Found", payloadStr, err)
+                    GeminiAudioResult.ModelUnavailable
+                }
+                HttpURLConnection.HTTP_GATEWAY_TIMEOUT, 429 -> {
+                    val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
+                    CrierLogBus.w(TAG, "$requestLogMsg -> HTTP $status Rate Limit / Timeout", payloadStr, err)
+                    GeminiAudioResult.Timeout
+                }
+                else -> {
+                    val err = readBounded(connection.errorStream)?.toString(Charsets.UTF_8).orEmpty()
+                    CrierLogBus.e(TAG, "$requestLogMsg -> HTTP $status Error", payloadStr, err)
+                    GeminiAudioResult.Unavailable
+                }
             }
-        } catch (_: SocketTimeoutException) {
+        } catch (e: SocketTimeoutException) {
+            CrierLogBus.w(TAG, "$requestLogMsg -> SocketTimeoutException", payloadStr, e.message)
             GeminiAudioResult.Timeout
-        } catch (_: InterruptedIOException) {
+        } catch (e: InterruptedIOException) {
+            CrierLogBus.w(TAG, "$requestLogMsg -> InterruptedIOException", payloadStr, e.message)
             GeminiAudioResult.Timeout
         } catch (e: Exception) {
-            Log.w(TAG, "gemini_tts_unavailable", e)
+            CrierLogBus.e(TAG, "$requestLogMsg -> Exception: ${e.message}", payloadStr, e.stackTraceToString())
             GeminiAudioResult.Unavailable
         } finally {
             connection?.disconnect()
@@ -126,10 +173,16 @@ class GeminiTtsClient(
         URL("https://generativelanguage.googleapis.com/v1beta/models/$encoded:generateContent")
     }.getOrNull()
 
-    internal fun buildRequestBody(prompt: String, voice: String): String {
+    internal fun buildRequestBody(prompt: String, voice: String, systemPrompt: String? = null): String {
         val escapedPrompt = escapeJson(prompt)
         val escapedVoice = escapeJson(voice)
-        return """{"contents":[{"parts":[{"text":"$escapedPrompt"}]}],"generationConfig":{"responseModalities":["AUDIO"],"speechConfig":{"voiceConfig":{"prebuiltVoiceConfig":{"voiceName":"$escapedVoice"}}}}}"""
+        val systemBlock = if (!systemPrompt.isNullOrBlank()) {
+            val escapedSys = escapeJson(systemPrompt.trim())
+            ""","systemInstruction":{"parts":[{"text":"$escapedSys"}]}"""
+        } else {
+            ""
+        }
+        return """{"contents":[{"parts":[{"text":"$escapedPrompt"}]}]$systemBlock,"generationConfig":{"responseModalities":["AUDIO"],"speechConfig":{"voiceConfig":{"prebuiltVoiceConfig":{"voiceName":"$escapedVoice"}}}}}"""
     }
 
     private fun escapeJson(value: String): String = buildString(value.length + 8) {

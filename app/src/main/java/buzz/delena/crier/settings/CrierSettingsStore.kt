@@ -76,6 +76,12 @@ class CrierSettingsStore(context: Context) {
             .ifBlank { GeminiTtsClient.DEFAULT_LANGUAGE }
         set(value) = prefs.edit().putString(KEY_LANGUAGE, value.trim()).apply()
 
+    var systemPrompt: String
+        get() = prefs.getString(KEY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT)
+            .orEmpty()
+            .ifBlank { DEFAULT_SYSTEM_PROMPT }
+        set(value) = prefs.edit().putString(KEY_SYSTEM_PROMPT, value.trim()).apply()
+
     var speakWhenLocked: Boolean
         get() = prefs.getBoolean(KEY_SPEAK_WHEN_LOCKED, true)
         set(value) = prefs.edit().putBoolean(KEY_SPEAK_WHEN_LOCKED, value).apply()
@@ -136,6 +142,9 @@ class CrierSettingsStore(context: Context) {
     }
 
     companion object {
+        const val DEFAULT_SYSTEM_PROMPT =
+            "You are Crier, a friendly, concise voice assistant. Summarize and read notifications aloud clearly, naturally, and conversationally."
+
         private const val PREFS = "crier_settings"
         private const val KEY_ENABLED = "assistant_enabled"
         private const val KEY_API_KEY_CIPHERTEXT = "gemini_api_key_ciphertext"
@@ -143,6 +152,7 @@ class CrierSettingsStore(context: Context) {
         private const val KEY_TTS_MODEL = "tts_model"
         private const val KEY_VOICE = "voice_name"
         private const val KEY_LANGUAGE = "language_code"
+        private const val KEY_SYSTEM_PROMPT = "system_prompt"
         private const val KEY_SPEAK_WHEN_LOCKED = "speak_when_locked"
         private const val KEY_ALLOW_ALL_APPS = "allow_all_apps"
         private const val KEY_QUIET_START = "quiet_start"

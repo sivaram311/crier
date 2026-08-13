@@ -34,28 +34,26 @@ Implemented all identified gaps from review rounds:
 - [x] Added in-app Back button navigation across Settings, Playground, and About screens.
 - [x] Added API Key missing banner with direct action to Settings on Home screen.
 
+## v0.1.5 (Released - live logs & API inspection, dynamic models, system prompt, full notification text)
+
+- [x] Added `CrierLogBus` and `LogsScreen` for real-time in-app debug logging with expandable API request payload JSON and response body viewers, search, and copy-all.
+- [x] Read-only API key box in Settings showing the complete key after saving, with Edit/Clear toggles.
+- [x] Dynamic model discovery via `GET /v1beta/models` populating all models accessible to the user's API key.
+- [x] Added customizable System Prompt / Persona in settings and playground injected into Gemini API `systemInstruction`.
+- [x] Passing full notification text context without early truncation.
+
 ## v0.2.0 (planned)
 
 - **Gemini Live API** wiring (`gemini-2.5-flash-native-audio-preview-09-2025` /
   `gemini-live-2.5-flash-preview`) — real-time bidirectional voice conversation from
   the Playground, not just one-shot TTS.
 - **STT** wiring for the cataloged transcription model.
-- **Full parameter playground**: speaking rate/pitch, turn/VAD sensitivity for Live
-  API, system-prompt/persona field, sample rate — every knob Gemini exposes, not
-  just model/voice/language.
-- **Live model catalog fetch** (`GET /v1beta/models`) instead of the static seed list
-  in `GeminiModelCatalog`, so new Gemini models show up without an app update.
 - **Opt-in, per-package notification history storage** — encrypted Room DB, separate
-  from any future launcher DB, retention cap enforced by WorkManager. Off by default,
-  reversing nothing about the current "never store title/body" default without an
-  explicit opt-in.
+  from any future launcher DB, retention cap enforced by WorkManager. Off by default.
 - **Process isolation** (`android:process=":relay"` for the listener + foreground
   service) plus a real cross-process bridge (Messenger/AIDL or a signature-permission
   ContentProvider) replacing the in-process `CrierPipelineBus`/`CrierStatusBus`
-  SharedFlow/StateFlow singletons — considered in v0.1.0's architecture doc, deferred
-  to keep the first ship scoped.
-- Realme-specific OEM autostart-allowlist onboarding copy (can't be requested via
-  intent; needs a manual Settings walkthrough in-app).
+  SharedFlow/StateFlow singletons.
 
 ## Explicit non-goals for now
 

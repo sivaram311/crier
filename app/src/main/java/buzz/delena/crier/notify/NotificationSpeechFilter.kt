@@ -20,15 +20,18 @@ object NotificationSpeechFilter {
         return titleOk || textOk
     }
 
-    fun spokenLine(appLabel: String, title: String?, text: String?): String {
+    fun spokenLine(appLabel: String, title: String?, text: String?, subText: String? = null): String {
         val head = title?.trim().orEmpty()
         val body = text?.trim().orEmpty()
-        val combined = when {
-            head.isNotEmpty() && body.isNotEmpty() -> "$appLabel: $head. $body"
-            head.isNotEmpty() -> "$appLabel: $head"
-            body.isNotEmpty() -> "$appLabel: $body"
-            else -> appLabel
-        }
-        return combined.take(220)
+        val extra = subText?.trim().orEmpty()
+
+        val parts = mutableListOf<String>()
+        if (head.isNotEmpty()) parts += head
+        if (extra.isNotEmpty() && extra != head) parts += "($extra)"
+        if (body.isNotEmpty() && body != head) parts += body
+
+        val content = parts.joinToString(". ")
+        val combined = if (content.isNotEmpty()) "$appLabel: $content" else appLabel
+        return combined.take(4000)
     }
 }

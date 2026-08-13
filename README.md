@@ -8,33 +8,26 @@ config, own release cadence.
 Package `buzz.delena.crier`. Sandbox DEV project (see [`docs/OPS.md`](docs/OPS.md)) —
 no host ports, no Postgres, no CSS for this APK.
 
-**Latest:** `v0.1.4-town-crier-dev` · versionCode **5**
+**Latest:** `v0.1.5-town-crier-dev` · versionCode **6**
 
-## What it does (v0.1.4)
+## What it does (v0.1.5)
 
-- Notification-listener service filters (per-app allowlist or allow-all, lock-screen speech, quiet hours, dedupe) and
-  speaks the notification via Gemini's native-audio TTS (`generateContent`,
-  `responseModalities: ["AUDIO"]`).
-- Plays audio through Android's media stream with full WAV container and raw PCM decoding support in `GeminiAudioPlayer`.
-- Seamless in-app navigation with Back buttons across Settings, Playground, and About screens.
-- Runs as a persistent low-priority foreground service so the relay survives after
-  you close the app — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for exactly
-  what that does and doesn't guarantee against OEM battery managers.
+- **Live Logs**: Real-time debug log viewer with full request payloads and API responses, tag filtering, copy, and clear functionality.
+- **Dynamic Model Discovery**: Queries Gemini API (`GET /v1beta/models`) with your API key to list and pick from all available Gemini models.
+- **System Prompt / Persona**: Customizable system instructions to direct Gemini on how to phrase, summarize, and synthesize spoken notifications.
+- **Full Notification Text Context**: Transmits complete rich notification content without early truncation.
+- **Read-only Saved Key**: Shows complete active key in read-only mode after saving, with full edit/clear controls.
+- **Lock-screen speech**: Configurable `speakWhenLocked` setting for reading notifications aloud with screen locked/in pocket.
+- **Streaming Audio Decoder**: Full WAV container parsing, stereo/mono support, and streaming `AudioTrack` output.
 - **Call-aware queueing**: notifications arriving while a call is ringing or active
   are queued, not spoken; the queue drains automatically once the call ends.
-- **Playground** screen: browse every Gemini voice model this build knows about
-  (TTS live-wired; STT and Live API cataloged for v0.2.0) and test-speak with any
-  model/voice/language combination.
-- Gemini API key is AES-GCM encrypted with an Android Keystore-backed key — same
-  pattern proven in forgecity-launcher's `AssistantSettingsStore`.
-- About screen shows app name + version (`buzz/delena/crier/ui/about/AboutScreen.kt`).
+- **Playground**: Test-speak with live models, voices, languages, and custom system prompts with immediate Live Log feedback.
+- Gemini API key is AES-GCM encrypted with an Android Keystore-backed key.
 
-## What's explicitly not in v0.1.4
+## What's explicitly not in v0.1.5
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) — Gemini Live API (real-time bidirectional
-voice), STT, the full per-parameter playground (rate/pitch/turn config), and
-opt-in encrypted notification history storage are staged for v0.2.0+, not stubbed
-here.
+voice), STT, and opt-in encrypted notification history storage are staged for v0.2.0+.
 
 ## Build
 
@@ -47,17 +40,12 @@ here.
 Sideload the debug APK from a tagged GitHub release:
 
 ```powershell
-curl.exe -L -o crier-0.1.4-town-crier-dev-debug.apk `
-  https://github.com/sivaram311/crier/releases/download/v0.1.4-town-crier-dev/crier-0.1.4-town-crier-dev-debug.apk
-Get-FileHash .\crier-0.1.4-town-crier-dev-debug.apk -Algorithm SHA256
-# expect 558CA6557E6F5C89D7A11BD553F89C8817C4DED0A64443CCFB8CA1877DAC6E5F
-adb install crier-0.1.4-town-crier-dev-debug.apk
+curl.exe -L -o crier-0.1.5-town-crier-dev-debug.apk `
+  https://github.com/sivaram311/crier/releases/download/v0.1.5-town-crier-dev/crier-0.1.5-town-crier-dev-debug.apk
+Get-FileHash .\crier-0.1.5-town-crier-dev-debug.apk -Algorithm SHA256
+# expect A4D97BA3AFAD6A0A5A5F6E550912502FDE5BAC2F7B1ED733DAFCA4C4B058FA12
+adb install crier-0.1.5-town-crier-dev-debug.apk
 ```
-
-Then grant notification access (Home screen has a shortcut button), add a Gemini
-API key in Settings, and exempt the app from battery optimization if you want the
-relay to survive aggressive OEM background kill (Realme included — see
-`docs/VERIFICATION.md`).
 
 ## Docs
 

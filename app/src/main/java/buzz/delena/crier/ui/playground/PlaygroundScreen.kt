@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,24 +41,45 @@ import buzz.delena.crier.gemini.GeminiTtsClient
 import buzz.delena.crier.settings.CrierSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
-fun PlaygroundScreen(onBack: () -> Unit = {}) {
+fun PlaygroundScreen(
+    onBack: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
+) {
     val context = LocalContext.current
     val settings = remember { CrierSettingsStore(context) }
     val scope = rememberCoroutineScope()
 
+    var availableModels by remember { mutableStateOf<List<GeminiModelOption>>(GeminiModelCatalog.TTS_MODELS) }
     var selectedModel by remember {
         val saved = settings.ttsModel
-        val option = GeminiModelCatalog.TTS_MODELS.firstOrNull { it.id == saved }
-            ?: GeminiModelCatalog.TTS_MODELS.first()
+        val option = availableModels.firstOrNull { it.id == saved }
+            ?: availableModels.first()
         mutableStateOf(option)
     }
     var voice by remember { mutableStateOf(settings.voiceName) }
     var language by remember { mutableStateOf(settings.languageCode) }
-    var prompt by remember { mutableStateOf("Hey, this is Crier checking in.") }
+    var systemPrompt by remember { mutableStateOf(settings.systemPrompt) }
+    var prompt by remember { mutableStateOf("Hey, this is Crier checking in. Your notifications are running smoothly!") }
     var status by remember { mutableStateOf<String?>(null) }
     var isSynthesizing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val apiKey = settings.apiKey()
+        if (!apiKey.isNullOrBlank()) {
+            scope.launch(Dispatchers.IO) {
+                val list = GeminiModelCatalog.fetchAvailableModels(apiKey)
+                withContext(Dispatchers.Main) {
+                    availableModels = list
+                    if (availableModels.none { it.id == selectedModel.id }) {
+                        selectedModel = availableModels.firstOrNull() ?: selectedModel
+                    }
+                }
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -70,33 +92,40 @@ fun PlaygroundScreen(onBack: () -> Unit = {}) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = onBack) {
-                    Text("← Back")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = onBack) {
+                        Text("← Back")
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("Playground", style = MaterialTheme.typography.headlineMedium)
                 }
-                Spacer(Modifier.width(12.dp))
-                Text("Playground", style = MaterialTheme.typography.headlineMedium)
+                OutlinedButton(onClick = onOpenLogs) {
+                    Text("Live Logs")
+                }
             }
         }
 
         item {
             Text(
-                "Try every Gemini voice model this build knows about. TTS runs live; " +
-                    "STT and Live API are cataloged for v0.2.0.",
+                "Try every Gemini voice model available for your API key. Inspect API payloads and responses in Live Logs.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
 
-        item { Text("Text-to-speech", style = MaterialTheme.typography.titleMedium) }
-        items(GeminiModelCatalog.TTS_MODELS) { option ->
+        item {
+            Text("Available TTS Models (${availableModels.size})", style = MaterialTheme.typography.titleMedium)
+        }
+        items(availableModels) { option ->
             ModelRow(option, selected = selectedModel.id == option.id) {
                 selectedModel = option
                 settings.ttsModel = option.id
             }
         }
 
-        item { Text("Speech-to-text", style = MaterialTheme.typography.titleMedium) }
+        item { Text("Speech-to-text (STT)", style = MaterialTheme.typography.titleMedium) }
         items(GeminiModelCatalog.STT_MODELS) { option ->
             ModelRow(option, selected = false, onSelect = {})
         }
@@ -109,13 +138,27 @@ fun PlaygroundScreen(onBack: () -> Unit = {}) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Test speak", style = MaterialTheme.typography.titleMedium)
+                    Text("Test Speak with System Prompt", style = MaterialTheme.typography.titleMedium)
+
+                    OutlinedTextField(
+                        value = systemPrompt,
+                        onValueChange = {
+                            systemPrompt = it
+                            settings.systemPrompt = it
+                        },
+                        label = { Text("System Prompt / Persona") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                    )
+
                     OutlinedTextField(
                         value = prompt,
                         onValueChange = { prompt = it },
-                        label = { Text("Text to speak") },
+                        label = { Text("Notification text to speak") },
                         modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
                     )
+
                     Button(
                         onClick = {
                             val apiKey = settings.apiKey()
@@ -123,7 +166,7 @@ fun PlaygroundScreen(onBack: () -> Unit = {}) {
                                 status = "Add a Gemini API key in Settings first."
                                 return@Button
                             }
-                            status = "Synthesizing…"
+                            status = "Synthesizing with ${selectedModel.label}…"
                             isSynthesizing = true
                             scope.launch(Dispatchers.IO) {
                                 try {
@@ -134,6 +177,7 @@ fun PlaygroundScreen(onBack: () -> Unit = {}) {
                                         prompt = prompt,
                                         voice = voice,
                                         languageCode = language,
+                                        systemPrompt = systemPrompt,
                                     )
                                     client.close()
                                     status = when (result) {
@@ -145,7 +189,7 @@ fun PlaygroundScreen(onBack: () -> Unit = {}) {
                                         GeminiAudioResult.ModelUnavailable -> "Model unavailable for this key."
                                         GeminiAudioResult.Timeout -> "Request timed out."
                                         GeminiAudioResult.Malformed -> "Malformed response."
-                                        GeminiAudioResult.Unavailable -> "Service unavailable — try again."
+                                        GeminiAudioResult.Unavailable -> "Service unavailable — check Live Logs."
                                     }
                                 } catch (e: Exception) {
                                     status = "Error: ${e.message}"
@@ -173,7 +217,7 @@ private fun ModelRow(option: GeminiModelOption, selected: Boolean, onSelect: () 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
             if (option.capability == GeminiCapability.TTS) {
                 RadioButton(selected = selected, onClick = onSelect)
             }

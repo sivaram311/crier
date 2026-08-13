@@ -52,6 +52,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenPlayground: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenLogs: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val settings = remember { CrierSettingsStore(context) }
@@ -119,11 +120,22 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Text(BuildInfo.APP_NAME, style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "Reads your notifications aloud with Gemini voices — quietly, in the background.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(BuildInfo.APP_NAME, style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "Reads your notifications aloud with Gemini voices.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                OutlinedButton(onClick = onOpenLogs) {
+                    Text("Live Logs")
+                }
+            }
         }
 
         item {
@@ -264,6 +276,9 @@ fun HomeScreen(
         }
         item {
             OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
+        }
+        item {
+            OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Live Logs") }
         }
         item {
             OutlinedButton(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth()) { Text("About") }

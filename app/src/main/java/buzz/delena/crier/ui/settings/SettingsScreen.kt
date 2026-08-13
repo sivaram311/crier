@@ -1,6 +1,7 @@
 package buzz.delena.crier.ui.settings
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,33 +26,69 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import buzz.delena.crier.gemini.GeminiModelCatalog
+import buzz.delena.crier.gemini.GeminiModelOption
 import buzz.delena.crier.settings.CrierSettingsStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit = {}) {
+fun SettingsScreen(
+    onBack: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
+) {
     val context = LocalContext.current
     val settings = remember { CrierSettingsStore(context) }
+    val scope = rememberCoroutineScope()
 
-    var apiKey by remember { mutableStateOf("") }
+    var storedKey by remember { mutableStateOf(settings.apiKey().orEmpty()) }
     var apiKeySaved by remember { mutableStateOf(settings.hasApiKey) }
+    var isEditingKey by remember { mutableStateOf(!settings.hasApiKey) }
+    var keyInput by remember { mutableStateOf(if (isEditingKey) "" else storedKey) }
+
+    var availableModels by remember { mutableStateOf<List<GeminiModelOption>>(GeminiModelCatalog.TTS_MODELS) }
+    var isFetchingModels by remember { mutableStateOf(false) }
+
     var model by remember { mutableStateOf(settings.ttsModel) }
     var voice by remember { mutableStateOf(settings.voiceName) }
     var language by remember { mutableStateOf(settings.languageCode) }
+    var systemPrompt by remember { mutableStateOf(settings.systemPrompt) }
     var speakWhenLocked by remember { mutableStateOf(settings.speakWhenLocked) }
     var allowAllApps by remember { mutableStateOf(settings.allowAllApps) }
     var searchQuery by remember { mutableStateOf("") }
+
+    fun refreshModels(key: String) {
+        if (key.isBlank()) return
+        isFetchingModels = true
+        scope.launch(Dispatchers.IO) {
+            val list = GeminiModelCatalog.fetchAvailableModels(key)
+            withContext(Dispatchers.Main) {
+                availableModels = list
+                isFetchingModels = false
+            }
+        }
+    }
+
+    LaunchedEffect(apiKeySaved) {
+        if (apiKeySaved && storedKey.isNotBlank()) {
+            refreshModels(storedKey)
+        }
+    }
 
     val installedApps = remember {
         val pm = context.packageManager
@@ -86,13 +123,19 @@ fun SettingsScreen(onBack: () -> Unit = {}) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = onBack) {
-                    Text("← Back")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = onBack) {
+                        Text("← Back")
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("Settings", style = MaterialTheme.typography.headlineMedium)
                 }
-                Spacer(Modifier.width(12.dp))
-                Text("Settings", style = MaterialTheme.typography.headlineMedium)
+                OutlinedButton(onClick = onOpenLogs) {
+                    Text("Live Logs")
+                }
             }
         }
 
@@ -101,31 +144,54 @@ fun SettingsScreen(onBack: () -> Unit = {}) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Gemini API key", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (apiKeySaved) "Saved (encrypted, on-device only)." else "Not set yet.",
+                        if (apiKeySaved) "Saved (read-only, on-device encrypted)." else "Enter your API key below.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (apiKeySaved) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                     )
+
                     OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        label = { Text("Paste API key") },
+                        value = if (isEditingKey) keyInput else storedKey,
+                        onValueChange = { if (isEditingKey) keyInput = it },
+                        readOnly = !isEditingKey,
+                        label = { Text(if (!isEditingKey) "API Key (Active & Read-only)" else "Paste API Key") },
                         placeholder = { Text("AIzaSy...") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = VisualTransformation.None,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            if (settings.saveApiKey(apiKey)) {
-                                apiKeySaved = settings.hasApiKey
-                                apiKey = ""
-                            }
-                        }) { Text("Save key") }
 
-                        if (apiKeySaved) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (isEditingKey) {
+                            Button(onClick = {
+                                val clean = keyInput.trim()
+                                if (clean.isNotEmpty() && settings.saveApiKey(clean)) {
+                                    storedKey = clean
+                                    apiKeySaved = true
+                                    isEditingKey = false
+                                    refreshModels(clean)
+                                    Toast.makeText(context, "API Key saved successfully", Toast.LENGTH_SHORT).show()
+                                }
+                            }) { Text("Save key") }
+
+                            if (apiKeySaved) {
+                                OutlinedButton(onClick = {
+                                    isEditingKey = false
+                                    keyInput = storedKey
+                                }) { Text("Cancel") }
+                            }
+                        } else {
+                            Button(onClick = {
+                                keyInput = storedKey
+                                isEditingKey = true
+                            }) { Text("Edit Key") }
+
                             OutlinedButton(onClick = {
                                 settings.saveApiKey("")
+                                storedKey = ""
+                                keyInput = ""
                                 apiKeySaved = false
+                                isEditingKey = true
+                                Toast.makeText(context, "API Key cleared", Toast.LENGTH_SHORT).show()
                             }) { Text("Clear key") }
                         }
                     }
@@ -136,10 +202,31 @@ fun SettingsScreen(onBack: () -> Unit = {}) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Voice & Speech", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Voice & Models", style = MaterialTheme.typography.titleMedium)
+                        if (apiKeySaved) {
+                            OutlinedButton(
+                                onClick = { refreshModels(storedKey) },
+                                enabled = !isFetchingModels,
+                            ) {
+                                Text(if (isFetchingModels) "Fetching..." else "Refresh Models")
+                            }
+                        }
+                    }
+
+                    Text(
+                        "${availableModels.size} models available for this API key",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+
                     LabeledDropdown(
                         label = "Model",
-                        options = GeminiModelCatalog.TTS_MODELS.map { it.id to it.label },
+                        options = availableModels.map { it.id to it.label },
                         selected = model,
                         onSelected = { model = it; settings.ttsModel = it },
                     )
@@ -155,6 +242,37 @@ fun SettingsScreen(onBack: () -> Unit = {}) {
                         selected = language,
                         onSelected = { language = it; settings.languageCode = it },
                     )
+                }
+            }
+        }
+
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("System Prompt / Persona", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Instructs Gemini on how to interpret, summarize, and phrase notification readings.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = systemPrompt,
+                        onValueChange = {
+                            systemPrompt = it
+                            settings.systemPrompt = it
+                        },
+                        label = { Text("System Instruction") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 6,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            systemPrompt = CrierSettingsStore.DEFAULT_SYSTEM_PROMPT
+                            settings.systemPrompt = systemPrompt
+                        }) {
+                            Text("Reset to Default")
+                        }
+                    }
                 }
             }
         }

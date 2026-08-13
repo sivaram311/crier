@@ -1,5 +1,11 @@
 package buzz.delena.crier.gemini
 
+import buzz.delena.crier.log.CrierLogBus
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
+
 /** What a model can actually do in this build — drives whether Playground can run it. */
 enum class GeminiCapability { TTS, STT, LIVE }
 
@@ -7,24 +13,24 @@ data class GeminiModelOption(
     val id: String,
     val label: String,
     val capability: GeminiCapability,
-    /** v0.1.0 only wires TTS end-to-end; STT/Live entries are catalog-only for now. */
-    val wiredInThisBuild: Boolean,
+    val wiredInThisBuild: Boolean = true,
 )
 
 /**
- * Static seed catalog for the Playground model picker. A live model-list
- * fetch (`GET /v1beta/models`) is planned for v0.2.0 so this doesn't go
- * stale as Google ships new models — see docs/ROADMAP.md.
+ * Seed catalog and dynamic live model discovery via `GET /v1beta/models`.
  */
 object GeminiModelCatalog {
-    val TTS_MODELS = listOf(
-        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash", GeminiCapability.TTS, true),
-        GeminiModelOption("gemini-2.0-flash-lite-preview-02-05", "Gemini 2.0 Flash Lite (preview)", GeminiCapability.TTS, true),
-        GeminiModelOption("gemini-2.5-flash-preview-tts", "Gemini 2.5 Flash (TTS preview)", GeminiCapability.TTS, true),
-        GeminiModelOption("gemini-2.5-pro-preview-tts", "Gemini 2.5 Pro (TTS preview)", GeminiCapability.TTS, true),
+    val DEFAULT_TTS_MODELS = listOf(
+        GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (Recommended)", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-flash", "Gemini 2.5 Flash", GeminiCapability.TTS, true),
         GeminiModelOption("gemini-2.5-pro", "Gemini 2.5 Pro", GeminiCapability.TTS, true),
+        GeminiModelOption("gemini-2.0-flash-exp", "Gemini 2.0 Flash Experimental", GeminiCapability.TTS, true),
     )
+
+    private var dynamicTtsModels: List<GeminiModelOption>? = null
+
+    val TTS_MODELS: List<GeminiModelOption>
+        get() = dynamicTtsModels ?: DEFAULT_TTS_MODELS
 
     val STT_MODELS = listOf(
         GeminiModelOption("gemini-2.0-flash", "Gemini 2.0 Flash (transcription)", GeminiCapability.STT, false),
@@ -37,9 +43,9 @@ object GeminiModelCatalog {
         GeminiModelOption("gemini-live-2.5-flash-preview", "Gemini Live 2.5 Flash (half-cascade)", GeminiCapability.LIVE, false),
     )
 
-    val ALL = TTS_MODELS + STT_MODELS + LIVE_MODELS
+    val ALL: List<GeminiModelOption>
+        get() = TTS_MODELS + STT_MODELS + LIVE_MODELS
 
-    /** Prebuilt Gemini TTS voice names, per Google's speech-generation docs. */
     val VOICES = listOf(
         "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda",
         "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus",
@@ -55,4 +61,67 @@ object GeminiModelCatalog {
         "de-DE" to "German",
         "ja-JP" to "Japanese",
     )
+
+    fun fetchAvailableModels(apiKey: String): List<GeminiModelOption> {
+        if (apiKey.isBlank()) return TTS_MODELS
+        return try {
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}")
+            val conn = url.openConnection() as HttpsURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("Content-Type", "application/json")
+
+            val status = conn.responseCode
+            val responseBody = if (status == HttpURLConnection.HTTP_OK) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            }
+            conn.disconnect()
+
+            CrierLogBus.d("GeminiCatalog", "fetchAvailableModels status=$status", "GET /v1beta/models", responseBody)
+
+            if (status == HttpURLConnection.HTTP_OK) {
+                val json = JSONObject(responseBody)
+                val modelsArray = json.optJSONArray("models")
+                if (modelsArray != null && modelsArray.length() > 0) {
+                    val list = mutableListOf<GeminiModelOption>()
+                    for (i in 0 until modelsArray.length()) {
+                        val m = modelsArray.getJSONObject(i)
+                        val rawName = m.optString("name")
+                        val displayName = m.optString("displayName", rawName)
+                        val supportedMethods = m.optJSONArray("supportedGenerationMethods")
+                        val methodsList = (0 until (supportedMethods?.length() ?: 0)).map {
+                            supportedMethods!!.getString(it)
+                        }
+
+                        val id = rawName.removePrefix("models/")
+                        if (methodsList.contains("generateContent") && (id.contains("flash") || id.contains("pro") || id.contains("gemini"))) {
+                            list += GeminiModelOption(
+                                id = id,
+                                label = if (displayName.isNotBlank()) displayName else id,
+                                capability = GeminiCapability.TTS,
+                                wiredInThisBuild = true,
+                            )
+                        }
+                    }
+
+                    if (list.isNotEmpty()) {
+                        val sorted = list.sortedWith(
+                            compareByDescending<GeminiModelOption> { it.id.contains("2.0-flash") }
+                                .thenByDescending { it.id.contains("2.5-flash") }
+                                .thenBy { it.label }
+                        )
+                        dynamicTtsModels = sorted
+                        return sorted
+                    }
+                }
+            }
+            TTS_MODELS
+        } catch (e: Exception) {
+            CrierLogBus.w("GeminiCatalog", "Failed to fetch live models: ${e.message}", null, null)
+            TTS_MODELS
+        }
+    }
 }

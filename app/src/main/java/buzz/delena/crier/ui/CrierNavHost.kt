@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import buzz.delena.crier.ui.about.AboutScreen
 import buzz.delena.crier.ui.home.HomeScreen
+import buzz.delena.crier.ui.logs.LogsScreen
 import buzz.delena.crier.ui.playground.PlaygroundScreen
 import buzz.delena.crier.ui.settings.SettingsScreen
 
@@ -15,6 +16,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val PLAYGROUND = "playground"
     const val ABOUT = "about"
+    const val LOGS = "logs"
 }
 
 @Composable
@@ -25,16 +27,26 @@ fun CrierNavHost(navController: NavHostController = rememberNavController()) {
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenPlayground = { navController.navigate(Routes.PLAYGROUND) },
                 onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                onOpenLogs = { navController.navigate(Routes.LOGS) },
             )
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenLogs = { navController.navigate(Routes.LOGS) },
+            )
         }
         composable(Routes.PLAYGROUND) {
-            PlaygroundScreen(onBack = { navController.popBackStack() })
+            PlaygroundScreen(
+                onBack = { navController.popBackStack() },
+                onOpenLogs = { navController.navigate(Routes.LOGS) },
+            )
         }
         composable(Routes.ABOUT) {
             AboutScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.LOGS) {
+            LogsScreen(onBack = { navController.popBackStack() })
         }
     }
 }
