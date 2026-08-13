@@ -1,5 +1,8 @@
 package buzz.delena.crier.ui.home
 
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,8 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -25,8 +30,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import buzz.delena.crier.BuildInfo
 import buzz.delena.crier.notify.NotificationAccess
+import buzz.delena.crier.notify.RuntimeGrants
 import buzz.delena.crier.service.BatteryOptimization
 import buzz.delena.crier.service.CrierStatusBus
 import buzz.delena.crier.settings.CrierSettingsStore
@@ -43,17 +50,43 @@ fun HomeScreen(
     val settings = remember { CrierSettingsStore(context) }
     val status by CrierStatusBus.status.collectAsState()
     var enabled by remember { mutableStateOf(settings.assistantEnabled) }
-    val hasNotificationAccess = remember { NotificationAccess.hasAccess(context) }
-    val ignoringBatteryOpt = remember { BatteryOptimization.isIgnoringOptimizations(context) }
 
-    val rows = listOf(
-        StatusRow("Notification listener", if (status.listenerConnected) "Connected" else "Not connected", status.listenerConnected),
-        StatusRow("Background relay", if (status.foregroundServiceRunning) "Running" else "Stopped", status.foregroundServiceRunning),
-        StatusRow("Call state", if (status.callActive) "On a call — queueing" else "Idle", !status.callActive),
-        StatusRow("Queued notifications", status.queuedCount.toString(), status.queuedCount == 0),
-        StatusRow("Notification access", if (hasNotificationAccess) "Granted" else "Not granted", hasNotificationAccess),
-        StatusRow("Battery optimization", if (ignoringBatteryOpt) "Exempted" else "Not exempted", ignoringBatteryOpt),
-    )
+    // System permission screens (notification access, battery exemption) and the
+    // runtime permission dialog below are all external to this composable, so a
+    // one-shot `remember` would keep showing stale "Not granted" after the user
+    // comes back having granted them. Bumping this on every resume forces the
+    // `remember(resumeTick)` reads below to recompute.
+    var resumeTick by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        resumeTick++
+        onPauseOrDispose { }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { resumeTick++ }
+    LaunchedEffect(Unit) {
+        val missing = RuntimeGrants.missing(context)
+        if (missing.isNotEmpty()) permissionLauncher.launch(missing)
+    }
+
+    val hasNotificationAccess = remember(resumeTick) { NotificationAccess.hasAccess(context) }
+    val ignoringBatteryOpt = remember(resumeTick) { BatteryOptimization.isIgnoringOptimizations(context) }
+    val hasPhoneState = remember(resumeTick) { RuntimeGrants.hasReadPhoneState(context) }
+    val hasPostNotifications = remember(resumeTick) { RuntimeGrants.hasPostNotifications(context) }
+
+    val rows = buildList {
+        add(StatusRow("Notification listener", if (status.listenerConnected) "Connected" else "Not connected", status.listenerConnected))
+        add(StatusRow("Background relay", if (status.foregroundServiceRunning) "Running" else "Stopped", status.foregroundServiceRunning))
+        add(StatusRow("Call state", if (status.callActive) "On a call — queueing" else "Idle", !status.callActive))
+        add(StatusRow("Queued notifications", status.queuedCount.toString(), status.queuedCount == 0))
+        add(StatusRow("Notification access", if (hasNotificationAccess) "Granted" else "Not granted", hasNotificationAccess))
+        add(StatusRow("Phone-state permission", if (hasPhoneState) "Granted" else "Not granted — calls won't be detected", hasPhoneState))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(StatusRow("Notification permission", if (hasPostNotifications) "Granted" else "Not granted", hasPostNotifications))
+        }
+        add(StatusRow("Battery optimization", if (ignoringBatteryOpt) "Exempted" else "Not exempted", ignoringBatteryOpt))
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -115,6 +148,14 @@ fun HomeScreen(
             item {
                 Button(onClick = { context.startActivity(NotificationAccess.settingsIntent(context)) }) {
                     Text("Grant notification access")
+                }
+            }
+        }
+
+        if (!hasPhoneState || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPostNotifications)) {
+            item {
+                Button(onClick = { permissionLauncher.launch(RuntimeGrants.missing(context)) }) {
+                    Text("Grant phone/notification permissions")
                 }
             }
         }
