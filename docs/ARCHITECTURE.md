@@ -21,12 +21,12 @@ code here is a fresh implementation following the same proven patterns (dedupe,
 speech filter, quiet hours, Keystore-encrypted API key) as forgecity-launcher's
 `assistant/` package, not a copy-paste of it.
 
-## Pipeline (v0.1.0)
+## Pipeline (v0.1.6)
 
 ```
 StatusBarNotification
-  → CrierNotificationListenerService (dedupe, quiet-hours, allowlist filter)
-  → CrierPipelineBus (in-process SharedFlow)
+  → CrierNotificationListenerService (dedupe, quiet-hours, privacy gate, allowlist filter, ongoing/FGS filters)
+  → CrierPipelineBus (in-process unlimited Channel)
   → CrierForegroundService
       ├─ CallStateGate.isCallActive == true  → SpeechQueue.enqueue
       └─ CallStateGate.isCallActive == false → GeminiTtsClient.synthesize → GeminiAudioPlayer.play
@@ -34,50 +34,30 @@ StatusBarNotification
 ```
 
 - `CrierNotificationListenerService` and `CrierForegroundService` run in the app's
-  default process for v0.1.0 (not process-isolated). The foreground service's job is
-  to keep that process at foreground priority so the OS is much less likely to kill
-  it — see the Known limits section below for what that does and doesn't guarantee.
-- `CrierPipelineBus` (SharedFlow) and `CrierStatusBus` (StateFlow) are in-process
-  singletons, same pattern as forgecity-launcher's `AssistantEventBridge`. They only
-  work because everything is one process; a future `:relay` process split (considered,
-  not built — see ROADMAP) would need a real cross-process bridge (Messenger/AIDL or
-  a signature-permission ContentProvider) to replace them.
-- Never stores notification title/body in v0.1.0 — matches forgecity-launcher's
-  existing privacy-first default. Opt-in encrypted history storage is a v0.2.0 item,
-  not silently added.
+  default process (not process-isolated). The foreground service keeps that process
+  at foreground priority so the OS is much less likely to kill it.
+- `CrierLogBus` (ring-buffer StateFlow) streams live debug, error, and API diagnostic events (URL, payload JSON, response JSON) to the in-app `LogsScreen`.
+- `CrierPipelineBus` (Channel) and `CrierStatusBus` (StateFlow) are in-process
+  singletons.
+- Never stores notification title/body on disk — privacy-first default. Opt-in encrypted history storage is a v0.2.0 item.
+
+## Gemini Audio & Model Compatibility
+
+- **TTS Engine**: `GeminiTtsClient` calls Google Gemini `v1beta` REST endpoint `generateContent` with `responseModalities: ["AUDIO"]` and `voiceConfig: { prebuiltVoiceConfig: { voiceName: ... } }`.
+- **Instruction Compatibility & Auto-Recovery**: For dedicated audio preview models (`gemini-3.1-flash-tts-preview`, `gemini-2.5-flash-preview-tts`, `gemini-2.5-pro-preview-tts`) where `systemInstruction` is restricted by the Gemini backend (`HTTP 400 Developer instruction is not enabled`), the client automatically inlines system persona instructions into the prompt text and features auto-retry fallback.
+- **Audio Output**: `GeminiAudioPlayer` decodes both WAV container headers (RIFF/fmt/data) and raw PCM (16-bit linear PCM, mono/stereo, 8kHz–48kHz), streaming audio via `AudioTrack` routed to `USAGE_MEDIA` on `STREAM_MUSIC`.
 
 ## Call-aware queueing
 
 `CallStateGate` wraps `TelephonyManager` (`TelephonyCallback` on API 31+,
 `PhoneStateListener` below that — `minSdk` is 26). `RINGING` and `OFFHOOK` both count
-as "wait" so a notification doesn't start talking over an incoming call's ring either.
-`SpeechQueue` is a pure, Android-free bounded FIFO (max 20 items / 10 minute max age)
-so a long call doesn't dump an unbounded backlog the moment it ends — unit-tested in
-`SpeechQueueTest`.
+as "wait" so a notification doesn't talk over an incoming call's ring.
+`SpeechQueue` is a thread-safe bounded FIFO (max 20 items / 10 minute max age)
+drained automatically when calls end.
 
 ## Config + secrets
 
 `CrierSettingsStore` — SharedPreferences file `crier_settings`, Gemini API key
 AES-GCM encrypted with an Android Keystore-backed 256-bit key (alias
-`crier_gemini_api_key`), same shape as forgecity-launcher's
-`AssistantSettingsStore.saveApiKey`. The key never leaves the Keystore; only the
+`crier_gemini_api_key`). The key never leaves the Keystore; only the
 ciphertext + IV live in prefs.
-
-## Known limits (v0.1.0, honestly stated)
-
-- **Not device-confirmed.** No physical Android device was attached to the build
-  host for this release; only `gradlew assembleDebug` + JVM unit tests ran. See
-  `docs/VERIFICATION.md`.
-- **Foreground-service priority ≠ immunity from OEM battery managers.** Realme's
-  (and other OEMs') aggressive background-kill / autostart-allowlist behavior is a
-  known, previously-documented pain point in forgecity-launcher (repeated "Realme
-  physical E2E pending" entries). `BatteryOptimization.requestExemptionIntent`
-  requests the standard Android exemption; it cannot reach the OEM-specific
-  autostart allowlist programmatically — that still needs a manual Settings nudge,
-  called out in the app's own onboarding.
-- **Single process.** `CrierNotificationListenerService` and `CrierForegroundService`
-  share a process with `MainActivity`. A UI crash could, in principle, take the
-  relay down with it. Process isolation (`android:process=":relay"`) was considered
-  and deliberately deferred — see `docs/ROADMAP.md`.
-- **Playground TTS-only.** STT and Live API are catalog entries, not wired to any
-  network call yet.
